@@ -1,4 +1,11 @@
+# Basic implementation of a GAN using MNSIT dataset
+# Kai Kharpertian
+# Feb. 2019
+# Original implementation by: Diego Gomez Mosquera (Feb. 1, 2018)
+
+###############
 # Dependencies
+###############
 import torch
 from torch import nn, optim
 from torch.autograd.variable import Variable
@@ -7,15 +14,17 @@ from torchvision import transforms, datasets
 # Visualization
 from utils import Logger
 
+###############
 # Dataset
+###############
 def mnist_data():
     compose = transforms.Compose( [transforms.ToTensor(),
                                    transforms.Normalize( (.5, .5, .5),
                                                          (.5, .5, .5))
                                   ])
-    out_dir = './mnist_dataset'
-    return datasets.MNIST(root = out_dir, train = True, transform = compose,
-                          download = True)
+    root = '/media/hdd1/kai/mnist_dataset'
+    return datasets.MNIST(root = root, train = True, transform = compose,
+                          download = False)
 
 # Load Data
 data = mnist_data()
@@ -55,13 +64,14 @@ def zeros_target(size):
     zeros = Variable(torch.zeros(size,1))
     return zeros
 
+###############
 # Discriminator
-# Input = Flattened images of dataset
-# Returns = Prob. of input belonging to dataset
+# Input: Flattened images of dataset
+# Returns: Prob. of input belonging to dataset
 
 # Architecture: 3 hidden layers with LReLU & Dropout
 #               Sigmoid applied to output
-
+###############
 class DNet(torch.nn.Module):
     def __init__(self):
         super(DNet, self).__init__()
@@ -90,6 +100,9 @@ class DNet(torch.nn.Module):
 
 DNet = DNet()
 
+###############
+# Generator
+###############
 class GNet(torch.nn.Module):
     def __init__(self):
         super(GNet, self).__init__()
@@ -118,7 +131,9 @@ class GNet(torch.nn.Module):
 
 GNet = GNet()
 
+###############
 # Optimization
+###############
 d_optim = optim.Adam(DNet.parameters(), lr = 2e-4)
 g_optim = optim.Adam(GNet.parameters(), lr = 2e-4)
 
@@ -166,7 +181,9 @@ def train_GNet(optimizer, fake_data):
 num_test_samples = 16
 test_noise = noise(num_test_samples)
 
+###############
 # Training
+###############
 # Create logger instance
 logger = Logger(model_name = "Test_GAN", data_name = "MNIST")
 
