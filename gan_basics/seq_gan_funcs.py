@@ -71,7 +71,7 @@ def train_GNet(optimizer, fake_data):
     # Return error
     return error
 
-def train(data_loader, data, logger, num_batches, num_epochs, d_optim, g_optim
+def train(data_loader, data, logger, num_batches, num_epochs, d_optim, g_optim,
            loss_fn, GNet, DNet):
     for epoch in range(num_epochs):
         for n_batch, (real_batch, _ ) in enumerate(data_loader):
