@@ -1,3 +1,6 @@
+import torch
+import torchvision
+
 class DNet(torch.nn.Module):
     """
     Discriminator network:
