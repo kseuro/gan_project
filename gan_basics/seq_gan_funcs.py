@@ -1,4 +1,5 @@
 from torchvision import transforms, datasets
+from torch.autograd.variable import Variable
 
 def mnist_data():
     compose = transforms.Compose( [transforms.ToTensor(),
