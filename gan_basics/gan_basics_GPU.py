@@ -15,7 +15,7 @@ from torchvision import transforms, datasets
 from utils import Logger
 
 # Functionality
-import seq_nets
+import seq_nets import GNet, DNet
 import seq_gan_funcs
 ##############################
 # Hardware Env.
@@ -28,7 +28,6 @@ torch.cuda.device(GPUID)
 ##############################
 def main():
 
-    global DNet, GNet
     DNet = DNet()
     DNet.cuda(GPUID)
     GNet = GNet()
