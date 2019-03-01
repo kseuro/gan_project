@@ -48,7 +48,7 @@ def noise(size):
     """
     Creates 1D vector of gaussian noise
     """
-    n = Variable(torch.randn(size, 100))
+    n = Variable(torch.randn(size, 100)).cuda()
     return n
 
 def ones_target(size):

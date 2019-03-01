@@ -2,6 +2,7 @@ import torch
 from torch import nn, optim
 from torchvision import transforms, datasets
 from torch.autograd.variable import Variable
+from seq_nets import GNet, DNet
 
 def mnist_data():
     compose = transforms.Compose( [transforms.ToTensor(),
@@ -22,24 +23,24 @@ def noise(size):
     """
     Creates 1d vector of gaussian noise
     """
-    n = Variable(torch.randn(size, 100))
+    n = Variable(torch.randn(size, 100)).cuda()
     return n
 
 def ones_target(size):
     """
     Tensor containing ones. Shape = size
     """
-    ones = Variable(torch.ones(size, 1))
+    ones = Variable(torch.ones(size, 1)).cuda()
     return ones
 
 def zeros_target(size):
     """
     Tensor containing zeroes. Shape = size
     """
-    zeros = Variable(torch.zeros(size,1))
+    zeros = Variable(torch.zeros(size,1)).cuda()
     return zeros
 
-def train_dNet(optimizer, real_data, g_data):
+def train_dNet(optimizer, real_data, fake_data, loss_fn, dNet):
     N = real_data.size(0)
     optimizer.zero_grad() # Reset gradients
 
@@ -59,7 +60,7 @@ def train_dNet(optimizer, real_data, g_data):
     # Return error and preds for real and fake inputs
     return error_real + error_fake, pred_real, pred_fake
 
-def train_GNet(optimizer, fake_data):
+def train_gNet(optimizer, fake_data, loss_fn, gNet, dNet):
     N = fake_data.size(0)
     optimizer.zero_grad() # Reset gradients
 
@@ -79,33 +80,39 @@ def train_GNet(optimizer, fake_data):
 def train(data_loader, data, logger, num_batches, num_epochs, d_optim, g_optim,
            loss_fn, gNet, dNet):
     for epoch in range(num_epochs):
+        # n_batch = x, real_batch = target
         for n_batch, (real_batch, _ ) in enumerate(data_loader):
             N = real_batch.size(0)
+            real_batch = real_batch.cuda()
 
             # 1. Train dNet
             real_data = Variable(img_to_vec(real_batch))
 
-            # Gen. fake data and detach
-            # detach so that grad not calc'd for GNet
-            fake_data = GNet(noise(N)).detach()
+            # gen. fake data and detach
+            # detach so that grad not calc'd for gNet
+            fake_data = gNet(noise(N)).detach()
 
             # Train d
             d_error, d_pred_real, d_pred_fake = \
-                train_dNet(d_optim, real_data, fake_data)
+                train_dNet(d_optim, real_data, fake_data, loss_fn, dNet)
 
-            # Train GNet
-            # Gen fake data
-            fake_data = GNet(noise(N))
+            # Train gNet
+            # gen fake data
+            fake_data = gNet(noise(N))
 
-            # Train G
-            g_error = train_GNet(g_optim, fake_data)
+            # Train g
+            g_error = train_gNet(g_optim, fake_data, loss_fn, gNet, dNet)
 
             # Log batch error
             logger.log(d_error, g_error, epoch, n_batch, num_batches)
 
+            # Test generator every few steps
+            num_test_samples = 16
+            test_noise = noise(num_test_samples)
+
             # disp. progress every few batches
             if n_batch % 100 == 0:
-                test_images = vec_to_img(GNet(test_noise))
+                test_images = vec_to_img(gNet(test_noise))
                 test_images = test_images.data
 
                 logger.log_images(

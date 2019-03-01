@@ -22,6 +22,7 @@ import seq_gan_funcs as funcs
 ##############################
 GPUID = 0
 torch.cuda.device(GPUID)
+use_cuda = torch.cuda.is_available()
 
 ##############################
 # Driver Function
@@ -29,9 +30,9 @@ torch.cuda.device(GPUID)
 def main():
 
     dNet = DNet()
-    dNet.cuda(GPUID)
+    dNet = dNet.cuda(GPUID)
     gNet = GNet()
-    gNet.cuda(GPUID)
+    gNet = gNet.cuda(GPUID)
 
     # Load Data
     data = funcs.mnist_data()
@@ -43,10 +44,6 @@ def main():
     # Create logger instance
     logger = Logger(model_name = "Test_GAN_GPU", data_name = "MNIST")
 
-    # Test generator every few steps
-    num_test_samples = 16
-    test_noise = funcs.noise(num_test_samples)
-
     # Optimization & training params
     num_epochs  = 200
     num_batches = len(data_loader)
@@ -54,8 +51,8 @@ def main():
     g_optim = optim.Adam(gNet.parameters(), lr = 2e-4)
     loss_fn = nn.BCELoss().cuda(GPUID)
 
-    train(data_loader, data, logger, num_batches, num_epochs, d_optim, g_optim,
-          loss_fn, gNet, dNet)
+    funcs.train(data_loader, data, logger, num_batches, num_epochs, d_optim,
+                g_optim, loss_fn, gNet, dNet)
 
 if __name__ == '__main__':
     main()

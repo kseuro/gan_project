@@ -76,7 +76,7 @@ class Logger:
 
         # Plot and save horizontal
         fig = plt.figure( figsize = (16, 16) )
-        plt.imshow(np.moveaxis(horizontal_grid.numpy(), 0, -1))
+        plt.imshow(np.moveaxis(horizontal_grid.cpu().numpy(), 0, -1))
         plt.axis('off')
 
         if plot_horizontal:
@@ -87,7 +87,7 @@ class Logger:
 
         # Save squared
         fig = plt.figure()
-        plt.imshow(np.moveaxis(grid.numpy(), 0, -1))
+        plt.imshow(np.moveaxis(grid.cpu().numpy(), 0, -1))
         plt.axis('off')
         self._save_images(fig, epoch, n_batch)
 
