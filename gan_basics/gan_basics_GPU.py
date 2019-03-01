@@ -15,7 +15,7 @@ from torchvision import transforms, datasets
 from utils import Logger
 
 # Functionality
-import seq_nets
+from seq_nets import GNet, DNet
 import seq_gan_funcs
 ##############################
 # Hardware Env.
