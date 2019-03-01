@@ -88,26 +88,26 @@ def train(data_loader, data, logger, num_batches, num_epochs, d_optim, g_optim,
             D_error, D_pred_real, D_pred_fake = \
                 train_DNet(d_optim, real_data, fake_data)
 
-                # Train GNet
-                # Gen fake data
-                fake_data = GNet(noise(N))
+            # Train GNet
+            # Gen fake data
+            fake_data = GNet(noise(N))
 
-                # Train G
-                G_error = train_GNet(g_optim, fake_data)
+            # Train G
+            G_error = train_GNet(g_optim, fake_data)
 
-                # Log batch error
-                logger.log(D_error, G_error, epoch, n_batch, num_batches)
+            # Log batch error
+            logger.log(D_error, G_error, epoch, n_batch, num_batches)
 
-                # Disp. progress every few batches
-                if n_batch % 100 == 0:
-                    test_images = vec_to_img(GNet(test_noise))
-                    test_images = test_images.data
+            # Disp. progress every few batches
+            if n_batch % 100 == 0:
+                test_images = vec_to_img(GNet(test_noise))
+                test_images = test_images.data
 
-                    logger.log_images(
-                    test_images, num_test_samples, epoch, n_batch, num_batches
-                    )
-                    # Disp status logs
-                    logger.display_status(
-                    epoch, num_epochs, n_batch, num_batches, D_error, G_error,
-                    D_pred_real, D_pred_fake
-                    )
+                logger.log_images(
+                test_images, num_test_samples, epoch, n_batch, num_batches
+                )
+                # Disp status logs
+                logger.display_status(
+                epoch, num_epochs, n_batch, num_batches, D_error, G_error,
+                D_pred_real, D_pred_fake
+                )
