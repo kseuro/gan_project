@@ -45,7 +45,7 @@ def main():
 
     # Test generator every few steps
     num_test_samples = 16
-    test_noise = noise(num_test_samples)
+    test_noise = funcs.noise(num_test_samples)
 
     # Optimization & training params
     num_epochs  = 200
