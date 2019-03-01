@@ -16,7 +16,7 @@ from utils import Logger
 
 # Functionality
 from seq_nets import GNet, DNet
-import seq_gan_funcs
+import seq_gan_funcs as funcs
 ##############################
 # Hardware Env.
 ##############################
@@ -34,7 +34,7 @@ def main():
     gNet.cuda(GPUID)
 
     # Load Data
-    data = mnist_data()
+    data = funcs.mnist_data()
 
     # Create loader with data - iterable object
     data_loader = torch.utils.data.DataLoader(data, batch_size = 100,
