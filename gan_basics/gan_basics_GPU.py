@@ -28,6 +28,7 @@ torch.cuda.device(GPUID)
 ##############################
 def main():
 
+    global DNet, GNet
     DNet = DNet()
     DNet.cuda(GPUID)
     GNet = GNet()
