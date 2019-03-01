@@ -1,7 +1,8 @@
 # Basic implementation of a GAN using MNSIT dataset
+# Computation carried out on CPU
 # Kai Kharpertian
 # Feb. 2019
-# Original implementation by: Diego Gomez Mosquera (Feb. 1, 2018)
+# Original implementation by: Diego Gomez Mosquera (Medium | Feb. 1, 2018)
 
 ###############
 # Dependencies
