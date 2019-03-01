@@ -15,7 +15,7 @@ from torchvision import transforms, datasets
 from utils import Logger
 
 # Functionality
-from seq_nets import GNet, DNet
+import seq_nets
 import seq_gan_funcs
 ##############################
 # Hardware Env.
@@ -28,10 +28,10 @@ torch.cuda.device(GPUID)
 ##############################
 def main():
 
-    DNet = DNet()
-    DNet.cuda(GPUID)
-    GNet = GNet()
-    GNet.cuda(GPUID)
+    dNet = DNet()
+    dNet.cuda(GPUID)
+    gNet = GNet()
+    gNet.cuda(GPUID)
 
     # Load Data
     data = mnist_data()
@@ -50,12 +50,12 @@ def main():
     # Optimization & training params
     num_epochs  = 200
     num_batches = len(data_loader)
-    d_optim = optim.Adam(DNet.parameters(), lr = 2e-4)
-    g_optim = optim.Adam(GNet.parameters(), lr = 2e-4)
+    d_optim = optim.Adam(dNet.parameters(), lr = 2e-4)
+    g_optim = optim.Adam(gNet.parameters(), lr = 2e-4)
     loss_fn = nn.BCELoss().cuda(GPUID)
 
     train(data_loader, data, logger, num_batches, num_epochs, d_optim, g_optim,
-          loss_fn, GNet, DNet)
+          loss_fn, gNet, dNet)
 
 if __name__ == '__main__':
     main()
