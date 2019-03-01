@@ -54,8 +54,8 @@ def main():
     g_optim = optim.Adam(GNet.parameters(), lr = 2e-4)
     loss_fn = nn.BCELoss().cuda(GPUID)
 
-    train(data_loader, data, logger, num_batches, num_epochs, d_optim, g_optim
-               loss_fn, GNet, DNet)
+    train(data_loader, data, logger, num_batches, num_epochs, d_optim, g_optim,
+          loss_fn, GNet, DNet)
 
 if __name__ == '__main__':
     main()
