@@ -1,5 +1,6 @@
 import torch
 import torchvision
+from torch import nn, optim
 
 class DNet(torch.nn.Module):
     """
