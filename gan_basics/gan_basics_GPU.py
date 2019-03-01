@@ -22,7 +22,6 @@ import seq_gan_funcs as funcs
 ##############################
 GPUID = 0
 torch.cuda.device(GPUID)
-use_cuda = torch.cuda.is_available()
 
 ##############################
 # Driver Function
