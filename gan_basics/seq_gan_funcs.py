@@ -1,3 +1,5 @@
+import torch
+from torch import nn, optim
 from torchvision import transforms, datasets
 from torch.autograd.variable import Variable
 
