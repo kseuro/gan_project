@@ -6,3 +6,7 @@ Basic implementation of a GAN using MNIST dataset.
 
 ### dcgan (Coming soon)
 Implementation of Deep Convolutional GAN framework.
+
+
+### TODO:
+Create a fully convolutional implementation of the basic GAN
