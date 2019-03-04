@@ -1,7 +1,6 @@
 # Basic implementation of a GAN using MNSIT dataset
 # Kai Kharpertian
 # Feb. 2019
-# Original implementation by: Diego Gomez Mosquera (Feb. 1, 2018)
 
 ##############################
 # Dependencies
@@ -33,18 +32,21 @@ def main():
     gNet = GNet()
     gNet = gNet.cuda(GPUID)
 
+    # Training parameter
+    batch_size = 100
+    num_epochs = 200
+
     # Load Data
     data = funcs.mnist_data()
 
     # Create loader with data - iterable object
-    data_loader = torch.utils.data.DataLoader(data, batch_size = 100,
+    data_loader = torch.utils.data.DataLoader(data, batch_size = batch_size,
                                               shuffle = True)
 
     # Create logger instance
     logger = Logger(model_name = "Test_GAN_GPU", data_name = "MNIST")
 
     # Optimization & training params
-    num_epochs  = 200
     num_batches = len(data_loader)
     d_optim = optim.Adam(dNet.parameters(), lr = 2e-4)
     g_optim = optim.Adam(gNet.parameters(), lr = 2e-4)
