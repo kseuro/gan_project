@@ -9,7 +9,7 @@ def mnist_data():
                                    transforms.Normalize( (.5, .5, .5),
                                                          (.5, .5, .5))
                                   ])
-    root = '/media/hdd1/kai/mnist_dataset'
+    root = '/media/hdd1/kai/datasets/mnist'
     return datasets.MNIST(root = root, train = True, transform = compose,
                           download = False)
 
