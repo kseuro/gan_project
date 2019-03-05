@@ -1,16 +1,16 @@
 import torch
 from torch import nn, optim
-from torchvision import transforms, datasets
+import torchvision.datasets  as dset
+import torchvision.transform as transform
 from torch.autograd.variable import Variable
 from seq_nets import GNet, DNet
 
-def mnist_data():
+def mnist_data(root):
     compose = transforms.Compose( [transforms.ToTensor(),
                                    transforms.Normalize( (.5, .5, .5),
                                                          (.5, .5, .5))
                                   ])
-    root = '/media/hdd1/kai/datasets/mnist'
-    return datasets.MNIST(root = root, train = True, transform = compose,
+    return dset.MNIST(root = root, train = True, transform = compose,
                           download = False)
 
 def img_to_vec(img):
@@ -40,6 +40,23 @@ def zeros_target(size):
     zeros = Variable(torch.zeros(size,1)).cuda()
     return zeros
 
+def weights_init(m):
+    """
+    Custon weight init based on DCGAN paper recommendations of
+    mean = 0.0, stdev = 0.2.
+    Input:   initialized model
+    Returns: reinitialized conv, conv-transpose, and batch-norm
+             layers that meet above criteria.
+    """
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find("BatchNorm") != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
+
+# TODO: Define loss function and optimizer
+
 def train_dNet(optimizer, real_data, fake_data, loss_fn, dNet):
     N = real_data.size(0)
     optimizer.zero_grad() # Reset gradients
@@ -58,7 +75,7 @@ def train_dNet(optimizer, real_data, fake_data, loss_fn, dNet):
     optimizer.step()
 
     # Return error and preds for real and fake inputs
-    return error_real + error_fake, pred_real, pred_fake
+    return (error_real + error_fake), pred_real, pred_fake
 
 def train_gNet(optimizer, fake_data, loss_fn, gNet, dNet):
     N = fake_data.size(0)
