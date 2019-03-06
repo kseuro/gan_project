@@ -74,12 +74,14 @@ class GNet(torch.nn.Module):
         - nc: number of color channels (rgb = 3) (bw = 1)
         - nz: length of the latent vector (100)
         - ngf: depth of feature maps carried through generator (28 for MNSIT)
+        - Transposed convolution is also known as fractionally-strided conv.
+            - One-to-many operation
     """
     def __init__(self, nc, nz, ngf, ngpu):
         super(GNet, self).__init__()
         self.ngpu = ngpu
         self.main = nn.Sequential(
-            nn.ConvTranspose2d( nz, ngf * 8, 4, 1, 0, bias = False),
+            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias = False),
             nn.BatchNorm2d(ngf * 8),
             nn.ReLU(True),
             # State size: (ngf*8) x 4 x 4 = 3584
