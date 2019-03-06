@@ -21,8 +21,10 @@ import conv_gan_funcs as funcs
 ##############################
 datarun = '/media/hdd1/kai/datasets/mnist'
 ngpu    = 1
-device  = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
 workers = 2
+device  = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0)
+                       else "cpu")
+
 
 ##############################
 # Driver Function
@@ -34,8 +36,8 @@ def main():
     gNet = GNet(1, 100, 28, ngpu).to(device)
 
     # DCGAN initialization
-    dNet.apply(funcs.weights_init())
-    gNet.apply(funcs.weights_init())
+    dNet.apply(funcs.weights_init)
+    gNet.apply(funcs.weights_init)
 
     # Uncomment to print model(s)
     # print(dNet)
@@ -57,12 +59,12 @@ def main():
     logger = Logger(model_name = "Test_GAN_GPU", data_name = "MNIST")
 
     # Optimization & training params
-    num_batches = len(data_loader)
+    num_batches = len(dataloader)
     d_optim = optim.Adam(dNet.parameters(), lr = 2e-4)
     g_optim = optim.Adam(gNet.parameters(), lr = 2e-4)
-    loss_fn = nn.BCELoss().cuda(GPUID)
+    loss_fn = nn.BCELoss().to(device)
 
-    funcs.train(data_loader, data, logger, num_batches, num_epochs, d_optim,
+    funcs.train(dataloader, data, logger, num_batches, num_epochs, d_optim,
                 g_optim, loss_fn, gNet, dNet)
 
 if __name__ == '__main__':

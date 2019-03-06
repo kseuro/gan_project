@@ -1,9 +1,9 @@
 import torch
 from torch import nn, optim
 import torchvision.datasets  as dset
-import torchvision.transform as transform
+import torchvision.transforms as transforms
 from torch.autograd.variable import Variable
-from seq_nets import GNet, DNet
+from conv_nets import GNet, DNet
 
 def mnist_data(root):
     compose = transforms.Compose( [transforms.ToTensor(),
