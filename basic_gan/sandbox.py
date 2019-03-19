@@ -1,14 +1,18 @@
 import torch
-import torch.nn as nn
+import torch.nn               as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.optim as optim
+import torch.backends.cudnn   as cudnn
+import torch.optim            as optim
 import torch.utils.data
-import torchvision.datasets as dset
+import torchvision.datasets   as dset
 import torchvision.transforms as transforms
-import torchvision.utils as vutils
-import numpy as np
+import torchvision.utils      as vutils
+import torch.autograd         as autograd
+import numpy                  as np
 
+##############################
+## DataLoader Sandbox
+##############################
 image_size = 28
 batch_size = 1
 workers    = 2
@@ -34,15 +38,16 @@ dataloader = torch.utils.data.DataLoader(dataset,
                                         num_workers = workers)
 
 for i, data in enumerate(dataloader, 0):
-    print(i)
-    print(type(data))
-    print(len(data))
     real_cpu = data[0].to(device)
     b_size   = real_cpu.size(0)
     label    = torch.full((b_size,), real_label, device = device)
-
-print(b_size)
-print(type(b_size))
-print(type(real_cpu))
-print(real_cpu.size())
-print(label)
+    if i % 2 == 0:
+        print(i)
+        print(b_size)
+        print(data[0])
+        print(data[1])
+        print(type(b_size))
+        print(type(real_cpu))
+        print(real_cpu.size())
+        print(label)
+        input()

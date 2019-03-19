@@ -1,47 +1,43 @@
-# Simple DCGAN implementation using MNIST dataset
+# DCGAN implementation using MNIST dataset
 # Kai Kharpertian
 # Tufts University
 # Department of Physics
 
-###############
+##############################
 # Dependencies
-###############
+##############################
+import os
+import errno
 import torch
-import torch.nn as nn
+import torch.nn               as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.optim as optim
+import torch.backends.cudnn   as cudnn
+import torch.optim            as optim
 import torch.utils.data
-import torchvision.datasets as dset
+import torchvision.datasets   as dset
 import torchvision.transforms as transforms
-import torchvision.utils as vutils
-import numpy as np
+import torchvision.utils      as vutils
+import numpy                  as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from   utils    import Logger
+from   datetime import datetime
 
-###############
+##############################
 # Inputs
-###############
-# Hardware & Data
-###############
-# dataroot: path to root dataset folder
-dataroot = '/media/hdd1/kai/datasets/mnist'
+##############################
 # workers: number of worker threads for loadings data with Dataloader
 workers = 2
-
 # Batch size during training
 batch_size = 128
-
 # Spatial size of training images. All images will be resized to this
 # size using a transformer.
 image_size = 28
-
 # nc: number of color channels [rgb = 3] [bw = 1]
 nc = 1
-# ngpu: number of gpu's available. Use 0 for CPU mode [much slower]
+# ngpu: number of gpu's available. Use 0 for CPU mode.
 ngpu = 0
-
-###############
-# Model Params
-###############
 # nz: length of the latent vector
 nz = 100
 # ngf: depth of feature maps carried through the generator [MNIST = 28]
@@ -55,9 +51,9 @@ lr = 0.0002
 # beta1: hyperparameter for Adam optimizer. Should be 0.5 per DCGAN paper
 beta1 = 0.5
 
-###############
+##############################
 # Data
-###############
+##############################
 def mnist_data(root):
     compose = transforms.Compose( [transforms.Resize(image_size),
                                    transforms.CenterCrop(image_size),
@@ -68,7 +64,12 @@ def mnist_data(root):
     return dset.MNIST(root = root, train = True, transform = compose,
                       download = False)
 
-dataset = mnist_data(dataroot)
+now       = datetime.now()
+date_time = now.strftime("%m-%d-%Y")
+dataroot  = '/media/hdd1/kai/datasets/mnist'
+out_dir   = '/media/hdd1/kai/projects/gan_project/dcgan/data/images'
+
+dataset  = mnist_data(dataroot)
 dataloader = torch.utils.data.DataLoader(dataset,
                                         batch_size = batch_size,
                                         shuffle = True,
@@ -77,9 +78,20 @@ dataloader = torch.utils.data.DataLoader(dataset,
 device = torch.device("cuda:2" if (torch.cuda.is_available() and ngpu > 0)
                         else "cpu")
 
-###############
-# Custom weights
-###############
+# TensorboardX
+logger = Logger(model_name = '_dcgan_test_'+ date_time , data_name = 'MNIST')
+
+##############################
+# Helper classes and functions
+##############################
+class Print(nn.Module):
+    def __init__(self):
+        super(Print, self).__init__()
+
+    def forward(self, x):
+        print(x.shape)
+        return x
+
 def weights_init(m):
     """
     Custon weight init based on DCGAN paper recommendations of
@@ -95,9 +107,58 @@ def weights_init(m):
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
 
-###############
+def make_dir(directory):
+    try:
+        os.makedirs(directory)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+
+def save_results(dataloader, out_dir, date_time, img_list, img_names,
+                 G_losses, D_losses):
+    """
+        Save and visualize results after the completion of training
+    """
+
+    make_dir(out_dir)
+
+    for img in range(len(img_list)):
+        plt.imsave(img_names[img], img_list[img]) # (filename, array)
+
+        plt.figure()
+        plt.title("Generator and Discriminator Loss Curves")
+        plt.plot(G_losses, label = 'G')
+        plt.plot(D_losses, label = 'D')
+        plt.xlabel('Iterations')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.savefig('{}/{}.png'.format(out_dir, date_time), dpi = 300)
+
+    # Side-by-Side of real vs fake images
+    # Get batch of real images
+    real_batch = next(iter(dataloader))
+
+    # Plot real images
+    name1 = 'real_batch'
+    plt.figure()
+    plt.subplot(1,2,1)
+    plt.axis("off")
+    plt.title("Real Images")
+    plt.savefig('{}/{}_{}.png'.format(out_dir, date_time, name1),
+                np.transpose(vutils.make_grid(real_batch[0].to(device)[:64],
+                                              padding=5, normalize=True).cpu(),
+                                              (1,2,0)))
+    # Plot G's images from last epoch
+    name2 = 'G_last_epoch'
+    plt.subplot(1,2,2)
+    plt.axis("off")
+    plt.title("Fake Images")
+    plt.savefig('{}/{}_{}.png'.format(out_dir, date_time, name2),
+                np.transpose(img_list[-1],(1,2,0)))
+
+##############################
 # Networks
-###############
+##############################
 class GNet(torch.nn.Module):
     """
     Designed to map a latent space vector (z) to data-space. Since the data
@@ -113,30 +174,42 @@ class GNet(torch.nn.Module):
         - ngf: depth of feature maps carried through generator (28 for MNSIT)
         - Transposed convolution is also known as fractionally-strided conv.
             - One-to-many operation
+    ConvTranspose2d output volume:
+        Input:  [N, C, Hin,  Win]
+        Output: [N, C, Hout, Wout] where:
+            Hout = (Hin - 1) * stride - 2 * pad + K + out_pad (default = 0)
+            Wout = (Win - 1) * stride - 2 * pad + K + out_pad (default = 0)
+            K = 4, S = 2, P = 1: doubles img. dim each layer
     """
     def __init__(self, ngpu):
         super(GNet, self).__init__()
         self.ngpu = ngpu
         self.main = nn.Sequential(
-            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias = False),
+            # Print(), # [128, 100, 1, 1]
+            nn.ConvTranspose2d(nz, ngf * 8, 2, 1, 0, bias = False),
+            # Print(), # [128, 224, 2, 2]
             nn.BatchNorm2d(ngf * 8),
             nn.ReLU(True),
-            # State size: (ngf*8) x 4 x 4 = 3584
+            # outvol: 31
             nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias = False),
+            # Print(), # [128, 112, 4, 4]
             nn.BatchNorm2d(ngf * 4),
             nn.ReLU(True),
-            # State size: (ngf*4) x 8 x 8 = 7168
+            # outvol: 62
             nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias = False),
+            # Print(), # [128, 56, 8, 8]
             nn.BatchNorm2d(ngf * 2),
             nn.ReLU(True),
-            # State size: (ngf*2) x 16 x 16 = 28627
+            # outvol: 124
             nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias = False),
-            nn.BatchNorm2d(ngf * 2),
+            # Print(), # [128, 28, 16, 16]
+            nn.BatchNorm2d(ngf),
             nn.ReLU(True),
-            # State size: (ngf*2) x 32 x 32 = 57334
-            nn.ConvTranspose2d(ngf, nc, 4, 2, 1, bias = False),
+            # outvol: 248
+            nn.ConvTranspose2d(ngf, nc, 4, 2, 3, bias = False),
+            # Print(), # [128, 1, 28, 28]
+            # outvol: 496
             nn.Tanh()
-            # State size: (nc) * 28 * 28 = 784
         )
 
     def forward(self, input):
@@ -157,8 +230,11 @@ class DNet(torch.nn.Module):
     Inputs:
         - nc: number of color channels (rgb = 3) (bw = 1)
         - ndf: sets depth of feature maps propagated through discriminator
-    Convolutional output volume: [W - K + 2P] / S + 1
-        W = Input dim
+    Convolutional output volume:
+        O = [i + 2*p - K - (K-1)*(d-1)] / S + 1
+        O = Output dim
+        i = Input dim
+        d = Dilation rate
         K = Kernel size
         P = Padding
         S = Stride
@@ -167,30 +243,28 @@ class DNet(torch.nn.Module):
         super(DNet, self).__init__()
         self.ngpu = ngpu
         self.main = nn.Sequential(
-            # input is (nc) x 28 x 28
             nn.Conv2d(nc, ndf, 2, 2, 0, bias = False),
+            # Print(), # [128, 28, 14, 14]
             nn.LeakyReLU(0.2, inplace = True),
-            # State size = (ndf) x 14 x 14 = 5488
-            # outvol: (28 - 2 + 2*0) / 2 + 1 = 14
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias = False),
+            nn.Conv2d(ndf, ndf * 2, 2, 2, 1, bias = False),
+            # Print(), # [128, 56, 8, 8]
             nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace = True),
-            # State size = (ndf * 2) x 7 x 7 = 2744
-            # outvol: (28 - 2 + 2*0) / 2 + 1 = 14
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias = False),
+            nn.Conv2d(ndf * 2, ndf * 4, 2, 2, 2, bias = False),
+            # Print(), # [128, 112, 6, 6]
             nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace = True),
-            # State size = (ndf * 4) x 4 x 4 = 1792
-            nn.Conv2d(ndf * 4, 1, 4, 1, 0, bias = False),
+            nn.Conv2d(ndf * 4, 1, 6, 1, 0, bias = False),
+            # Print(), # [128, 1, 1, 1]
             nn.Sigmoid()
         )
 
     def forward(self, input):
         return self.main(input)
 
-###############
+##############################
 # Instantiation
-###############
+##############################
 # Networks
 netG = GNet(ngpu).to(device)
 netD = DNet(ngpu).to(device)
@@ -204,9 +278,9 @@ if (device.type == 'cuda') and (ngpu > 1):
 netG.apply(weights_init)
 netD.apply(weights_init)
 
-###############
+##############################
 # Loss Fn and Optim
-###############
+##############################
 # BCE loss function
 criterion = nn.BCELoss()
 
@@ -221,9 +295,9 @@ fake_label = 0
 optimG = optim.Adam(netG.parameters(), lr = lr, betas = (beta1, 0.999))
 optimD = optim.Adam(netD.parameters(), lr = lr, betas = (beta1, 0.999))
 
-###############
+##############################
 # Training
-###############
+##############################
 """
     - Discriminator training
     - Goal of D is to maximize prob of correctly classifying a given input as
@@ -265,10 +339,12 @@ optimD = optim.Adam(netD.parameters(), lr = lr, betas = (beta1, 0.999))
 """
 # Training Loop
 # Lists to track progress
-img_list = []
-G_losses = []
-D_losses = []
-iters    = 0
+img_list    = []
+img_names   = []
+G_losses    = []
+D_losses    = []
+iters       = 0
+num_batches = len(dataloader)
 
 # print("Parameters:             ")
 # print("Workers:                ",workers)
@@ -285,78 +361,87 @@ iters    = 0
 # For each epoch
 for epoch in range(num_epochs):
     # For each batch in the dataloader
-    for i, data in enumerate(dataloader, 0):
-        ###############
+    for n_batch, data in enumerate(dataloader, 0):
+        ##############################
         # Update D: maximize log(D(x)) + log(1 - D(G(z)))
-        ###############
-        # Train on real batch
+        ##############################
+        ## Train on real batch
         netD.zero_grad()
 
-        print('     ')
-        print('     ')
-        print('     ')
         # Format batch
-        real_cpu = data[0].to(device) # type: Torch Tensor: [1, 1, 28, 28]
-        print('real_cpu.size():', real_cpu.size())
+        real_cpu = data[0].to(device) # type: Torch Tensor: [128, 1, 28, 28]
 
-        b_size   = real_cpu.size(0)   # type: int = 1
-        print('b_size:', b_size)
+        # All real data -> create tensor full of 1's
+        b_size = real_cpu.size(0)        # type: int = 128
+        label  = torch.full((b_size,), real_label, device = device)
+        label  = label.view(-1, 1, 1, 1) # reshape to match output dim
 
-        label    = torch.full((b_size,), real_label, device = device)
         # Forward pass real batch through D
-        output   = netD(real_cpu).view(0)
+        output = netD(real_cpu)
 
         # Calculate loss on real batch
-        print('output.size():', output.size())
-        print('label.size():', label.size())
-        print('     ')
-        print('     ')
-        print('     ')
         errD_real = criterion(output, label) # ('Input', 'Target')
 
         # Calculate gradients for D in backward pass
         errD_real.backward()
-        D_x = output.mean().item()
+        D_x = output.mean().item()           # float.32
 
-        # Train on a fake batch
+        ## Train on a fake batch
         # Generate batch of latent vectors
         noise = torch.randn(b_size, nz, 1, 1, device = device)
+
         # Generate fake img batch using G
         fake_data = netG(noise)
         label.fill_(fake_label)
+
         # Classify all fake batches with D
-        output = netD(fake_data.detach()).view(-1)
-        # Calc D's loss on fake batche
+        output = netD(fake_data.detach()).view(-1, 1, 1, 1)
+        # print(output.size()) # [3200, 1, 1, 1]
+
+        # Calc D's loss on fake batch
         errD_fake = criterion(output, label)
+
         # Calc gradients for this batch
         errD_fake.backward()
         D_G_z1 = output.mean().item()
+
         # Add accumulated gradients from real and fake batches
         errD = errD_real + errD_fake
+
         # Update D
         optimD.step()
 
-        ###############
+        ##############################
         # Update G: maximize log(D(G(z)))
-        ###############
+        ##############################
         netG.zero_grad()
-        label.fill_(real_batch) # fake labels -> real labels for G loss
+        label.fill_(real_label) # fake labels -> real labels for G loss
+
         # Perform second forward pass of fake batch through updated D
-        output = netD(fake).view(-1)
+        output = netD(fake_data).view(-1, 1, 1, 1)
+
         # Calc G's loss based on this output
         errG = criterion(output, label)
+
         # Calc G's gradient
         errG.backward()
         D_G_z2 = output.mean().item()
-        # Update G
-        optimizer.step()
 
-        ###############
+        # Update G
+        optimG.step()
+
+        # Log batch error to TBx
+        logger.log(errD_fake, errD_real, errG, epoch, n_batch, num_batches)
+
+        ##############################
         # Output training stats
-        ###############
-        if i % 50 == 0:
+        ##############################
+        if n_batch % 50 == 0:
+            # disp status logs
+            # logger.display_status(epoch, num_epochs, n_batch, num_batches,
+            #                       d_error, g_error, d_pred_real, d_pred_fake)
             print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
-                    % (epoch, num_epochs, i, len(dataloader),
+                    % (epoch, num_epochs, n_batch, len(dataloader),
                        errD.item(), errG.item(), D_x, D_G_z1, D_G_z2))
 
             # Save losses for plotting
@@ -364,11 +449,16 @@ for epoch in range(num_epochs):
             D_losses.append(errD.item())
 
             # Check G's progress
-            if (iters % 500 == 0) or ( (epoch == num_epochs-1) and
-                                     ( i == len(dataloader)-1)):
+            if (iters % 500 == 0) or ( (epoch  == num_epochs - 1 )  and
+                                     ( n_batch == len(dataloader) - 1 ) ):
                 with torch.no_grad():
                     fake = netG(fixed_noise).detach().cpu()
-                img_list.append(vutils.make_grid(fake,
-                                                 padding = 2,
-                                                 normalize = True))
+                    fake.numpy()
+                img_list.append(fake)
+                img_names.append('{}/{}_epoch_{}_batch.png'.format(out_dir,
+                                                                   epoch,
+                                                                   n_batch))
             iters += 1
+
+save_results(dataloader, out_dir, date_time, img_list, img_names,
+             G_losses, D_losses)
