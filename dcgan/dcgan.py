@@ -37,7 +37,7 @@ image_size = 28
 # nc: number of color channels [rgb = 3] [bw = 1]
 nc = 1
 # ngpu: number of gpu's available. Use 0 for CPU mode.
-ngpu = 0
+ngpu = 1
 # nz: length of the latent vector
 nz = 100
 # ngf: depth of feature maps carried through the generator [MNIST = 28]
@@ -45,7 +45,7 @@ ngf = 28
 # ndf: sets depth of feature maps propagated through discriminator
 ndf = 28
 # Number of training epochs
-num_epochs = 5
+num_epochs = 100
 # lr: learning rate, should be 0.0002 per DCGAN paper
 lr = 0.0002
 # beta1: hyperparameter for Adam optimizer. Should be 0.5 per DCGAN paper
@@ -65,17 +65,17 @@ def mnist_data(root):
                       download = False)
 
 now       = datetime.now()
-date_time = now.strftime("%m-%d-%Y")
+date_time = now.strftime("%m-%d-%Y, %H:%M:%S")
 dataroot  = '/media/hdd1/kai/datasets/mnist'
-out_dir   = '/media/hdd1/kai/projects/gan_project/dcgan/data/images'
+out_dir   = '/media/hdd1/kai/projects/gan_project/dcgan/data/images' + date_time
 
 dataset  = mnist_data(dataroot)
 dataloader = torch.utils.data.DataLoader(dataset,
                                         batch_size = batch_size,
                                         shuffle = True,
                                         num_workers = workers,
-                                        drop_last = True)
-device = torch.device("cuda:2" if (torch.cuda.is_available() and ngpu > 0)
+                                        drop_last = False)
+device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
                         else "cpu")
 
 # TensorboardX
@@ -122,39 +122,42 @@ def save_results(dataloader, out_dir, date_time, img_list, img_names,
 
     make_dir(out_dir)
 
-    for img in range(len(img_list)):
-        plt.imsave(img_names[img], img_list[img]) # (filename, array)
+    # Save G's sample images                        # [64, 1, 28, 28]
+    for index in range(len(img_list)):              # 2
+        for img in range(img_list[index].shape[0]): # 64
+            # (filename, array)
+            plt.imsave(img_names[index] + '_' + str(img) + '.png',
+                       img_list[index][img].reshape(28, 28), cmap = 'gray')
 
-        plt.figure()
-        plt.title("Generator and Discriminator Loss Curves")
-        plt.plot(G_losses, label = 'G')
-        plt.plot(D_losses, label = 'D')
-        plt.xlabel('Iterations')
-        plt.ylabel('Loss')
-        plt.legend()
-        plt.savefig('{}/{}.png'.format(out_dir, date_time), dpi = 300)
-
-    # Side-by-Side of real vs fake images
-    # Get batch of real images
-    real_batch = next(iter(dataloader))
-
-    # Plot real images
-    name1 = 'real_batch'
+    # Plot G and D losses
     plt.figure()
-    plt.subplot(1,2,1)
-    plt.axis("off")
-    plt.title("Real Images")
-    plt.savefig('{}/{}_{}.png'.format(out_dir, date_time, name1),
-                np.transpose(vutils.make_grid(real_batch[0].to(device)[:64],
-                                              padding=5, normalize=True).cpu(),
-                                              (1,2,0)))
-    # Plot G's images from last epoch
-    name2 = 'G_last_epoch'
-    plt.subplot(1,2,2)
-    plt.axis("off")
-    plt.title("Fake Images")
-    plt.savefig('{}/{}_{}.png'.format(out_dir, date_time, name2),
-                np.transpose(img_list[-1],(1,2,0)))
+    plt.title("Generator and Discriminator Loss Curves")
+    plt.plot(G_losses, label = 'G')
+    plt.plot(D_losses, label = 'D')
+    plt.xlabel('Iterations')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.savefig('{}/{}.png'.format(out_dir, date_time), dpi = 300)
+
+    # # Side-by-Side of real vs fake images
+    # # Get batch of real images
+    # real_batch = next(iter(dataloader))
+    #
+    # # Plot real images
+    # name1 = 'real_batch'
+    # plt.figure()
+    # plt.plot(np.transpose(vutils.make_grid(real_batch[0].to(device)[:28],
+    #                                           padding=5, normalize=True).cpu(),
+    #                                           (1,2,0)))
+    # plt.title("Real Images")
+    # plt.savefig(name1)
+    #
+    # # Plot G's images from last epoch
+    # name2 = 'G_last_epoch'
+    # plt.figure()
+    # plt.plot(np.transpose(img_list[-1],(1,2,0)))
+    # plt.title("Fake Images")
+    # plt.savefig(name2)
 
 ##############################
 # Networks
@@ -448,17 +451,16 @@ for epoch in range(num_epochs):
             G_losses.append(errG.item())
             D_losses.append(errD.item())
 
-            # Check G's progress
-            if (iters % 500 == 0) or ( (epoch  == num_epochs - 1 )  and
-                                     ( n_batch == len(dataloader) - 1 ) ):
-                with torch.no_grad():
-                    fake = netG(fixed_noise).detach().cpu()
-                    fake.numpy()
-                img_list.append(fake)
-                img_names.append('{}/{}_epoch_{}_batch.png'.format(out_dir,
-                                                                   epoch,
-                                                                   n_batch))
-            iters += 1
+        # Check G's progress
+        if (iters % num_batches == 0) or ( (epoch  == num_epochs - 1 )  and
+                                         ( n_batch == len(dataloader) - 1 ) ):
+            with torch.no_grad():
+                fake = netG(fixed_noise).detach().cpu() # [64, 1, 28, 28]
+            img_list.append(fake)
+            img_names.append('{}/{}_epoch_{}_batch'.format(out_dir,
+                                                               epoch,
+                                                               n_batch))
+        iters += 1
 
 save_results(dataloader, out_dir, date_time, img_list, img_names,
              G_losses, D_losses)
