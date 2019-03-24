@@ -8,7 +8,11 @@ Basic implementation of a GAN using MNIST dataset. This small project is meant t
 Implementation of deep convolutional GAN framework. 
 
 #### TODO:
+
 Phase 1: Perform proof-of-concept of DCGAN using MNSIT dataset.
-Phase 2: Modify functioning DCGAN to accept particle gun data as input
-Phase 3: Convert functioning DCGAN to WGAN-GP model using particle gun data
+
+Phase 2: Modify functioning DCGAN to accept particle gun data as input.
+
+Phase 3: Convert functioning DCGAN to WGAN-GP model using particle gun data.
+
 
