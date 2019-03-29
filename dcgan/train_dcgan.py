@@ -24,9 +24,10 @@ import matplotlib.pyplot as plt
 import itertools
 import ganfuncs
 import imageio
-from dcgan import GNet, DNet
+import random
 from   utils    import Logger
 from   datetime import datetime
+from   dcgan    import GNet, DNet
 
 ##############################
 # Inputs
@@ -39,7 +40,7 @@ ngpu       = 1      # 0: CPU mode; > 1: MultiGPU mode
 nz         = 100    # length of the latent vector
 ngf        = 128    # depth of generator feature maps
 ndf        = 128    # depth of discriminator feature maps
-num_epochs = 10     # number of epochs
+num_epochs = 20     # number of epochs
 lr         = 0.0002 # Should be 0.0002 per DCGAN paper
 beta1      = 0.5    # Should be 0.5 per DCGAN paper
 z_dim      = 5      # Defines batch size of fixed or random noise vectors
@@ -52,12 +53,13 @@ dataroot    = '/media/hdd1/kai/datasets/mnist'
 dataloader  = ganfuncs.mnist_data(image_size, batch_size, workers, dataroot)
 num_batches = len(dataloader)
 
-# TODO: get TBx functionality working
+# TODO: get TbX functionality working
 # TensorboardX
 # logger = Logger(model_name = '_dcgan_test_'+ date_time , data_name = 'MNIST')
 
 device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
                       else "cpu")
+
 # Fixed noise vector for testing G's performance
 fixed_noise = torch.randn( (z_dim * z_dim, nz) ).view(-1, nz, 1, 1).to(device)
 
@@ -85,9 +87,9 @@ netD.to(device)
 # Binary Cross Entropy Loss
 BCE_loss = nn.BCELoss()
 
-# Est. convention for real and fake labels
-real_label = 1
-fake_label = 0
+# # Est. convention for real and fake labels
+# real_label = 0
+# fake_label = 1
 
 # Adam optimizer
 optimG = optim.Adam(netG.parameters(), lr = lr, betas = (beta1, 0.999))
@@ -97,7 +99,7 @@ optimD = optim.Adam(netD.parameters(), lr = lr, betas = (beta1, 0.999))
 train_hist = ganfuncs.train_hist()
 
 # Times and save directory
-start_time, out_dir, now, date_time = ganfuncs.train_start()
+start_time, out_dir, now, date_time = ganfuncs.train_start(time.time())
 
 ##############################
 # Training Loop
@@ -106,10 +108,9 @@ for epoch in range(num_epochs):
 
     D_losses = []
     G_losses = []
-    
+
     epoch_start_time = time.time()
 
-    # for n_batch, img in enumerate(dataloader):
     for x_, _ in dataloader:
         '''
         - Discriminator training
@@ -121,11 +122,18 @@ for epoch in range(num_epochs):
 
         mini_batch = x_.size()[0]
 
-        # Real target
-        y_real_ = torch.ones(mini_batch).view(-1, 1, 1, 1).to(device)
+        # Establish soft data labels
+        # Flip target on BCE loss: real: 1->0, fake: 0->1
+        real_label = random.uniform(0, 0.1)
+        fake_label = random.uniform(0.9, 1.0)
 
-        # Fake target
-        y_fake_ = torch.zeros(mini_batch).view(-1, 1, 1, 1).to(device)
+        # real target
+        y_real_ = torch.full( (mini_batch,), real_label, device = device)
+        y_real_ = y_real_.view(-1, 1, 1, 1)
+
+        # fake target
+        y_fake_ = torch.full( (mini_batch,), fake_label, device = device)
+        y_fake_ = y_fake_.view(-1, 1, 1, 1)
 
         # Train D on a real batch
         x_ = x_.to(device)
@@ -133,8 +141,8 @@ for epoch in range(num_epochs):
         D_real_loss = BCE_loss(D_result, y_real_) # Calc loss log(D(x))
 
         # Generate fake batch
-        z_ = ganfuncs.random_noise(z_dim, nz, device) # ([25, 100, 1, 1])
-        G_result = netG(z_)                           # ([25, 1, 64, 64])
+        z_ = ganfuncs.random_noise(z_dim, nz)     # ([25, 100, 1, 1])
+        G_result = netG(z_)                       # ([25, 1, 64, 64])
 
         # Train D on fake batch
         D_result = netD(G_result)                 # Forward pass through D
@@ -165,10 +173,12 @@ for epoch in range(num_epochs):
         netG.zero_grad()
 
         # Generate random noise
-        z_ = ganfuncs.random_noise(z_dim, nz, device) # [25, 100, 1, 1]
+        z_ = ganfuncs.random_noise(z_dim, nz) # [25, 100, 1, 1]
 
         # Push noise through G
         G_result = netG(z_)                   # [25, 1, 64, 64]
+
+        # Push G's output through D
         D_result = netD(G_result)             # [25, 1, 1, 1]
 
         # Calculate loss and backprop
@@ -182,6 +192,9 @@ for epoch in range(num_epochs):
         # Output status to terminal
         if num_iters % 100 == 0:
             print('[epoch.{} / num_epochs.{}]'.format(epoch, num_epochs))
+            print('loss_d: %.3f, loss_g: %.3f' %
+                 (torch.mean(torch.FloatTensor(D_losses)),
+                  torch.mean(torch.FloatTensor(G_losses))))
 
         num_iters += 1
 
@@ -218,7 +231,7 @@ train_hist['D_losses'].append(torch.mean(torch.FloatTensor(D_losses)))
 train_hist['G_losses'].append(torch.mean(torch.FloatTensor(G_losses)))
 train_hist['per_epoch_time'].append(epoch_time)
 
-#TODO: Fix this -- model params not saving
+# TODO: Fix this -- model params not saving (no file created)
 # Save model parameters
 ext = '.tar'
 ganfuncs.save_model(netG, out_dir, ext, G = True)  # G params
