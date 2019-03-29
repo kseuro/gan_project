@@ -5,7 +5,9 @@ Generative adversarial networks applied to high energy particle simulation.
 Basic implementation of a GAN using MNIST dataset. This small project is meant to be a proof of concept, as well as act as the first building block in the research project.
 
 ### dcgan 
-Implementation of deep convolutional GAN framework. Architecture, initializations and training parameters taken from: Radford, Goodfellow, et al [arXiv: 1511.06434v2](https://arxiv.org/pdf/1511.06434v2.pdf) and [arXiv: 1606.03498v1 Improved Techniques for Trainings GANs](https://arxiv.org/pdf/1606.03498.pdf) 
+Implementation of deep convolutional GAN framework. Architecture, initializations and training parameters taken from: Radford, Goodfellow, et al 
+- [arXiv: 1511.06434v2: Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks](https://arxiv.org/pdf/1511.06434v2.pdf)
+- [arXiv: 1606.03498v1: Improved Techniques for Trainings GANs](https://arxiv.org/pdf/1606.03498.pdf) 
 
 #### TODO:
 
