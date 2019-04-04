@@ -25,7 +25,6 @@ import itertools
 import ganfuncs
 import imageio
 import random
-from   utils    import Logger
 from   datetime import datetime
 from   dcgan    import GNet, DNet
 from tensorboardX import SummaryWriter
@@ -54,11 +53,10 @@ dataroot    = '/media/hdd1/kai/datasets/mnist'
 dataloader  = ganfuncs.mnist_data(image_size, batch_size, workers, dataroot)
 num_batches = len(dataloader)
 
-# TODO: get TbX functionality working
 # TensorboardX
-# logger = Logger(model_name = '_dcgan_test_'+ date_time , data_name = 'MNIST')
 writer = SummaryWriter('/media/hdd1/kai/tensorBoard/runs/gan_project')
 
+# Select GPU or CPU
 device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
                       else "cpu")
 
@@ -66,7 +64,6 @@ device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
 fixed_noise = torch.randn( (z_dim * z_dim, nz) ).view(-1, nz, 1, 1).to(device)
 
 # TODO: implement periodic saving of checkpoints and best checkpoint
-#       come up with criteria that constitute a best checkpoint
 
 ##############################
 # Instantiation
@@ -251,7 +248,6 @@ print("Avg time per epoch: %.2f, total %d epochs time: %.2f" %
      (torch.mean(torch.FloatTensor(train_hist['per_epoch_time'])),
      num_epochs, total_time))
 
-# TODO: Fix this -- model params not saving (no file created)
 # Save model parameters
 ext = '.tar'
 ganfuncs.save_model(netG, out_dir, ext, G = True)  # G params

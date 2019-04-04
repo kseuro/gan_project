@@ -1,18 +1,26 @@
 # gan_project
-Generative adversarial networks applied to high energy particle simulation.
+A generative adversarial network applied to high energy particle simulation.
 
-### gan_basics
+The primary goal of this project is to faithfully reproduce high energy particle interaction images using a generative adversarial network model. Secondary goals include better informed Monte-Carlo algorithm construction based the latent representation of a fully trained GAN, as well as less expensive production of neural network training datasets for future projects.
+
+### Project List
+#### gan_basics
 Basic implementation of a GAN using MNIST dataset. This small project is meant to be a proof of concept, as well as act as the first building block in the research project.
 
-### dcgan (under construction)
-Implementation of deep convolutional GAN framework. 
+#### dcgan 
+Implementation of deep convolutional GAN framework. Architecture, initializations and training parameters taken from: Radford, Goodfellow, et al 
+- [arXiv: 1511.06434v2: Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks](https://arxiv.org/pdf/1511.06434v2.pdf)
+- [arXiv: 1606.03498v1: Improved Techniques for Trainings GANs](https://arxiv.org/pdf/1606.03498.pdf) 
+
+#### larcv_dcgan (in-progress)
+Implementation of dcgan framework using LArCV1 particle gun data.
 
 #### TODO:
 
-Phase 1: Perform proof-of-concept of DCGAN using MNSIT dataset.
+Phase 1: Perform proof-of-concept of DCGAN performance using MNIST dataset (complete)
 
-Phase 2: Modify functioning DCGAN to accept particle gun data as input.
+Phase 2: Modify functioning DCGAN to work with LArCV1 particle gun data.
 
-Phase 3: Convert functioning DCGAN to WGAN-GP model using particle gun data.
+Phase 3: Convert functioning DCGAN to WGAN-GP model.
 
 
