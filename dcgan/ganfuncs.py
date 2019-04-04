@@ -101,7 +101,7 @@ def train_start(time):
     date       = now.strftime("%m-%d-%Y")
     time       = now.strftime("%H-%M-%S")
     date_time  = date + '_' + time
-    out_dir    = '/media/hdd1/kai/projects/gan_project/dcgan/MNSIT' + date_time
+    out_dir    = '/media/hdd1/kai/projects/gan_project/dcgan/MNSIT_' + date_time
 
     return start_time, out_dir, now, date_time
 

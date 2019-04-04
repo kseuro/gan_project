@@ -20,7 +20,7 @@ import torchvision.utils      as vutils
 import numpy                  as np
 import matplotlib
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+import matplotlib.pyplot      as plt
 import itertools
 import ganfuncs
 import imageio
@@ -28,6 +28,7 @@ import random
 from   utils    import Logger
 from   datetime import datetime
 from   dcgan    import GNet, DNet
+from tensorboardX import SummaryWriter
 
 ##############################
 # Inputs
@@ -56,12 +57,16 @@ num_batches = len(dataloader)
 # TODO: get TbX functionality working
 # TensorboardX
 # logger = Logger(model_name = '_dcgan_test_'+ date_time , data_name = 'MNIST')
+writer = SummaryWriter('/media/hdd1/kai/tensorBoard/runs/gan_project')
 
 device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
                       else "cpu")
 
 # Fixed noise vector for testing G's performance
 fixed_noise = torch.randn( (z_dim * z_dim, nz) ).view(-1, nz, 1, 1).to(device)
+
+# TODO: implement periodic saving of checkpoints and best checkpoint
+#       come up with criteria that constitute a best checkpoint
 
 ##############################
 # Instantiation
@@ -76,8 +81,8 @@ netD = DNet(nc, ndf)
 #     netD = nn.DataParallel(netD, list(range(ngpu)))
 
 # Custom weight init
-netG.apply(ganfuncs.weights_init)
-netD.apply(ganfuncs.weights_init)
+netG.apply(ganfuncs.weights_init) # weights on cpu
+netD.apply(ganfuncs.weights_init) # weights on cpu
 netG.to(device)
 netD.to(device)
 
@@ -86,10 +91,6 @@ netD.to(device)
 ##############################
 # Binary Cross Entropy Loss
 BCE_loss = nn.BCELoss()
-
-# # Est. convention for real and fake labels
-# real_label = 0
-# fake_label = 1
 
 # Adam optimizer
 optimG = optim.Adam(netG.parameters(), lr = lr, betas = (beta1, 0.999))
@@ -189,22 +190,45 @@ for epoch in range(num_epochs):
         # Append G losses to list
         G_losses.append(G_train_loss.data)
 
+        # Calculate average loss for D and G
+        loss_d = torch.mean(torch.FloatTensor(D_losses))
+        loss_g = torch.mean(torch.FloatTensor(G_losses))
+
+        # Write losses to training history
+        train_hist['D_losses'].append(loss_d)
+        train_hist['G_losses'].append(loss_g)
+
         # Output status to terminal
         if num_iters % 100 == 0:
             print('[epoch.{} / num_epochs.{}]'.format(epoch, num_epochs))
-            print('loss_d: %.3f, loss_g: %.3f' %
-                 (torch.mean(torch.FloatTensor(D_losses)),
-                  torch.mean(torch.FloatTensor(G_losses))))
+            print('loss_d:{:.3f}, loss_g:{:.3f}'.format(loss_d, loss_g))
+
+        # Output losses to TbX
+        writer.add_scalar('D_Loss', loss_d.item(), epoch)
+        writer.add_scalar('G_Loss', loss_g.item(), epoch)
 
         num_iters += 1
 
     epoch_end_time = time.time()
     epoch_time = epoch_end_time - epoch_start_time
 
-    print('[%d/%d] - epoch_time: %.2f, loss_d: %.3f, loss_g: %.3f' %
-         ((epoch + 1), num_epochs, epoch_time, torch.mean(torch.FloatTensor(D_losses)),
-          torch.mean(torch.FloatTensor(G_losses))))
+    loss_d = torch.mean(torch.FloatTensor(D_losses))
+    loss_g = torch.mean(torch.FloatTensor(G_losses))
 
+    # Write end-of-epoch losses to training history
+    train_hist['D_losses'].append(loss_d)
+    train_hist['G_losses'].append(loss_g)
+    train_hist['per_epoch_time'].append(epoch_time)
+
+    # Output epoch summary to terminal
+    print_string = '[{}/{}] - epoch_time:{}, loss_d:{:.3f}, loss_g:{:.3f}'
+    print(print_string.format((epoch + 1), num_epochs, epoch_time, loss_d, loss_g))
+
+    # Output end-of-epoch losses to TbX
+    writer.add_scalar('D_Loss', loss_d.item(), epoch)
+    writer.add_scalar('G_Loss', loss_g.item(), epoch)
+
+    # Save current-state GAN outputs
     ganfuncs.save_outputs(netG, out_dir, epoch, num_epochs, datetime,
                           fixed_noise)
 
@@ -218,6 +242,7 @@ print('#################')
 print('End of training')
 print('#################')
 
+writer.close()
 end_time = time.time()
 total_time = end_time - start_time
 train_hist['total_time'].append(total_time)
@@ -225,11 +250,6 @@ print('Total time:', total_time)
 print("Avg time per epoch: %.2f, total %d epochs time: %.2f" %
      (torch.mean(torch.FloatTensor(train_hist['per_epoch_time'])),
      num_epochs, total_time))
-
-# Append mean loss value
-train_hist['D_losses'].append(torch.mean(torch.FloatTensor(D_losses)))
-train_hist['G_losses'].append(torch.mean(torch.FloatTensor(G_losses)))
-train_hist['per_epoch_time'].append(epoch_time)
 
 # TODO: Fix this -- model params not saving (no file created)
 # Save model parameters
