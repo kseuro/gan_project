@@ -1,5 +1,9 @@
 # ganfuncs.py
-# Helper classes and functions for training DCGAN
+# purpose: collection of helper functions and classes for
+#          training a DCGAN on the LArCV1 dataset
+# Kai Kharpertian
+# Tufts University
+# Department of Physics
 
 ##############################
 # Import scripts
@@ -24,27 +28,59 @@ import imageio
 from   datetime import datetime
 
 ##############################
-# Helper classes and functions
+# Helper classes
 ##############################
-def mnist_data(image_size, batch_size, workers, dataroot):
-    compose = transforms.Compose( [transforms.Resize(image_size),
-                                   transforms.ToTensor(),
-                                   transforms.Normalize( (.5, .5, .5),
-                                                         (.5, .5, .5)),
-                                  ])
-    dataset = dset.MNIST(root = dataroot, train = True, transform = compose,
-                         download = False)
+class LArCV1Dataset:
+    """
+        Class for creating numpy image data objects from ROOT files.
+        Object needs cfgfile string in order to locate and load ROOT files.
+        methods: init: creates an instan of data file interface.
+                 getbatch: returns LArCV image as torch tensor.
+    """
+    def __init__(self, name, cfgfile ):
+        # inputs
+        # cfgfile: path to configuration.
+        self.name = name
+        self.cfgfile = cfgfile
+        return
 
-    dataloader = torch.utils.data.DataLoader(dataset,
-                                             batch_size = batch_size,
-                                             shuffle = True,
-                                             num_workers = workers)
-    return dataloader
+    def init(self):
+        self.io = larcv.ThreadDatumFiller(self.name)
+        self.io.configure(self.cfgfile)
+        self.nentries = self.io.get_n_entries()
+        self.io.set_next_index(0)
+        print("[LArCV1Data] able to create ThreadDatumFiller")
+        return
+
+    def getbatch(self, batchsize):
+        self.io.batch_process(batchsize)
+        time.sleep(0.1)
+        itry = 0
+        while self.io.thread_running() and itry<100:
+            time.sleep(0.01)
+            itry += 1
+        if itry>=100:
+            raise RuntimeError("Batch Loader timed out")
+
+        # fill SegData object
+        data = SegData()
+        dimv = self.io.dim() # c++ std vector through ROOT bindings
+        self.dim  = (dimv[0], dimv[1], dimv[2], dimv[3] )
+        self.dim3 = (dimv[0], dimv[2], dimv[3] )
+
+        # numpy arrays
+        data.np_images    = np.zeros( self.dim,  dtype=np.float32 )
+        data.np_images[:] = larcv.as_ndarray(self.io.data()).reshape(self.dim)[:]
+
+        # pytorch tensors
+        data.images = torch.from_numpy(data.np_images)
+
+        return data
 
 class Print(nn.Module):
     '''
         Outputs the shape of convolutional layers in model.
-        Call Print() inbetween layers to get shape output to
+        Call Print() in between layers to get shape output to
             the terminal.
     '''
     def __init__(self):
@@ -54,13 +90,18 @@ class Print(nn.Module):
         print(x.shape)
         return x
 
+##############################
+# Helper functions
+##############################
 def weights_init(m):
     """
     Custon weight init based on DCGAN paper recommendations of
     mean = 0.0, stdev = 0.2
-    Input:   initialized model
-    Returns: reinitialized conv, conv-transpose, and batch-norm
-             layers that meet above criteria.
+    Input:   - initialized model
+    Returns: - reinitialized conv, conv-transpose, and batch-norm
+               layers that meet above criteria.
+             - NOTE: this function moves the weights on the cpu!
+                     Move network onto GPU after calling!
     """
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -73,9 +114,6 @@ def random_noise(dim, nz):
     device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     return torch.randn( (dim * dim, nz) ).view(-1, nz, 1, 1).to(device)
 
-##############################
-# Saving and plotting
-##############################
 def make_dir(directory):
     try:
         os.makedirs(directory)
@@ -84,24 +122,31 @@ def make_dir(directory):
             raise
 
 def train_hist():
+    """
+        Returns dictionary for storing training results
+    """
     train_hist                   = {}
     train_hist['D_losses']       = []
     train_hist['G_losses']       = []
     train_hist['per_epoch_time'] = []
-    train_hist['total_time']     = []
+    train_hist['total_time_s']   = []
+    train_hist['total_time_h']   = []
+    train_hist['total_iter']     = []
 
     return train_hist
 
-def train_start(time):
-    print('#################')
-    print('Start of training')
-    print('#################')
+def train_start(out_dir, time):
+    """
+        Returns: - custom out_dir for saving model outputs
+                 - start_time for computing training time
+    """
+    make_dir(out_dir)
     start_time = time
     now        = datetime.now()
     date       = now.strftime("%m-%d-%Y")
     time       = now.strftime("%H-%M-%S")
     date_time  = date + '_' + time
-    out_dir    = '/media/hdd1/kai/projects/gan_project/dcgan/MNSIT_' + date_time
+    out_dir    = out_dir + date_time
 
     return start_time, out_dir, now
 
@@ -117,7 +162,8 @@ def save_model(model, savepath, ext, G):
 def save_outputs(model, out_dir, epoch, num_epochs, datetime, fixed_noise):
     '''
         Creates a set of directories for saving G's output at the end of
-        each epoch. Both random noise and fixed noise results are saved.
+         each epoch. Both random noise and fixed noise results are saved.
+        Out_dir string is created in train_start function.
     '''
     out_dir_random = out_dir + '/random_result_' + str(epoch + 1)
     out_dir_fixed_ = out_dir + '/fixed_result_'  + str(epoch + 1)
@@ -128,56 +174,43 @@ def save_outputs(model, out_dir, epoch, num_epochs, datetime, fixed_noise):
 
     # results using random noise
     savepath = out_dir_random + '/g_random_result'
-    show_results(model, (num_epochs + 1), fixed_noise, savepath,
-                          show = False, isFixed = False)
+    show_results(model, epoch, fixed_noise, savepath, isFixed = False)
+
     # results using fixed noise
     savepath = out_dir_fixed_ + '/g_fixed_result'
-    show_results(model, (num_epochs + 1), fixed_noise, savepath,
-                          show = False, isFixed = True)
+    show_results(model, epoch, fixed_noise, savepath, isFixed = True)
 
-def show_results(model, num_epochs, fixed_noise, savepath, show=False, isFixed=False):
-
-    z_ = random_noise(5, 100)
+def show_results(model, epoch, fixed_noise, savepath, isFixed=False):
+    """
+        Function for visualizing intermediate results during and after training.
+    """
+    z_ = random_noise(1, 100)
 
     if isFixed:
         test_imgs = model(fixed_noise)
     else:
         test_imgs = model(z_)
 
-    sfg = 5 # size of grid in figure
+    sfg = 1 # size of grid in figure
     fig, axes = plt.subplots(sfg, sfg, figsize = (sfg, sfg))
     for i, j in itertools.product(range(sfg), range(sfg)):
         axes[i, j].get_xaxis().set_visible(False)
         axes[i, j].get_yaxis().set_visible(False)
 
-    for k in range(5 * 5):
-        i = k // 5
-        j = k % 5
+    for k in range(1):
         axes[i, j].cla()
         axes[i, j].imshow(test_imgs[k, 0].cpu().data.numpy(), cmap = 'gray')
 
-    label = 'Epoch_{}'.format(num_epochs)
+    label = 'Epoch_{}'.format(epoch)
     fig.text(0.5, 0.04, label, ha = 'center')
     plt.savefig(savepath)
-
-    if show:
-        plt.show()
-    else:
-        plt.close()
+    plt.close()
 
 def plot_losses(out_dir, date_time, G_losses, D_losses):
     """
-        Save and visualize results after the completion of training
+        Save and visualize results after the completion of training.
     """
-
     make_dir(out_dir)
-
-    # # Save G's sample images               # [64, 1, 64, 64]
-    # for index, arr in enumerate(img_list): # index, object
-    #     for img in range(arr[0].shape[0]): # 64
-    #         # (filename, array)
-    #         plt.imsave(img_names[index] + '_' + str(img) + '.png',
-    #                    arr[img, :, :, :].reshape((64, 64)), cmap = 'gray')
 
     # Plot G and D losses
     plt.figure()

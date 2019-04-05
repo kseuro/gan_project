@@ -1,4 +1,4 @@
-# Training routine for DCGAN model
+# Training routine for larcv-dcgan model
 # Kai Kharpertian
 # Tufts University | Department of Physics
 # Tufts Neutrino Group
@@ -6,6 +6,7 @@
 ##############################
 # Import scripts
 ##############################
+## Torch, Numpy, Matplotlib
 import os, time
 import errno
 import torch
@@ -19,12 +20,16 @@ import torchvision.transforms as transforms
 import torchvision.utils      as vutils
 import numpy                  as np
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg') # Set matplotlib backend to Agg for I/O
 import matplotlib.pyplot      as plt
+
+## Larcv, ROOT, functions, models
 import itertools
 import ganfuncs
 import imageio
 import random
+import ROOT
+from   larcv        import larcv
 from   datetime     import datetime
 from   dcgan        import GNet, DNet
 from   tensorboardX import SummaryWriter
@@ -33,28 +38,34 @@ from   tensorboardX import SummaryWriter
 # Inputs
 ##############################
 workers    = 2      # dataloader worker threads
-batch_size = 25     # Batch size during training
-image_size = 64     # Spatial size of training images.
+batch_size = 5      # Batch size during training
+image_size = 512    # Spatial size of training images.
 nc         = 1      # number of color channels [rgb = 3] [bw = 1]
 ngpu       = 1      # 0: CPU mode; > 1: MultiGPU mode
 nz         = 100    # length of the latent vector
 ngf        = 128    # depth of generator feature maps
 ndf        = 128    # depth of discriminator feature maps
-num_epochs = 20     # number of epochs
+num_epochs = 1      # number of epochs
 lr         = 0.0002 # Should be 0.0002 per DCGAN paper
 beta1      = 0.5    # Should be 0.5 per DCGAN paper
-z_dim      = 5      # Defines batch size of fixed or random noise vectors
+z_dim      = 1      # Defines batch size of fixed or random noise vectors
 num_iters  = 0      # Start at zero
 
 ##############################
 # Data and logging
 ##############################
-dataroot    = '/media/hdd1/kai/datasets/mnist'
-dataloader  = ganfuncs.mnist_data(image_size, batch_size, workers, dataroot)
-num_batches = len(dataloader)
+# Data configuration
+cfg_head = "ThreadDatumFillerTrain"
+cfg_file = "~/Kai/deeplearnphysics/pytorch/gan_project/larcv_dcgan/segfiller_train.cfg"
+with open(crg_file, 'r') as cfg:
+    cfg_string = cfg.read()
+
+# Load LArCV1Data
+dataloader = LArCV1Dataset(cfg_head, cfg_string)
+dataloader.init()
 
 # TensorboardX
-writer = SummaryWriter('/media/hdd1/kai/tensorBoard/runs/gan_project')
+# writer = SummaryWriter('/media/hdd1/kai/tensorBoard/runs/gan_project')
 
 # Select GPU or CPU
 device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
@@ -62,6 +73,7 @@ device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
 
 # Fixed noise vector for testing G's performance
 fixed_noise = torch.randn( (z_dim * z_dim, nz) ).view(-1, nz, 1, 1).to(device)
+
 
 ##############################
 # Instantiation
@@ -95,19 +107,21 @@ optimD = optim.Adam(netD.parameters(), lr = lr, betas = (beta1, 0.999))
 train_hist = ganfuncs.train_hist()
 
 # Times and save directory
-start_time, out_dir, now = ganfuncs.train_start(time.time())
+out_dir = '/media/hdd1/kai/projects/gan_project/larcv-dcgan/'
+start_time, out_dir, now = ganfuncs.train_start(out_dir, time.time())
 
 ##############################
 # Training Loop
 ##############################
 for epoch in range(num_epochs):
 
-    D_losses = []
-    G_losses = []
+    # List of loss values for TB and plotting
+    D_Losses = []
+    G_Losses = []
 
     epoch_start_time = time.time()
 
-    for x_, _ in dataloader:
+    for iter in range(0, n_batches):
         '''
         - Discriminator training
             - Goal of D is to maximize prob of correctly classifying a given
@@ -115,8 +129,6 @@ for epoch in range(num_epochs):
             - Want to maximize log(D(x)) + log(1 - D(G(z)))
         '''
         netD.zero_grad()
-
-        mini_batch = x_.size()[0]
 
         # Establish soft data labels
         # Flip target on BCE loss: real: 1->0, fake: 0->1
@@ -131,9 +143,12 @@ for epoch in range(num_epochs):
         y_fake_ = torch.full( (mini_batch,), fake_label, device = device)
         y_fake_ = y_fake_.view(-1, 1, 1, 1)
 
+        # Create data object on GPU
+        data = dataloader.getbatch(batchsize) # torch tensor training images
+        larcv_imgs = torch.Tensor(data.images.to(device))
+
         # Train D on a real batch
-        x_ = x_.to(device)
-        D_result = netD(x_)                       # Forward pass through D
+        D_result = netD(larcv_imgs)               # Forward pass through D
         D_real_loss = BCE_loss(D_result, y_real_) # Calc loss log(D(x))
 
         # Generate fake batch
@@ -194,38 +209,41 @@ for epoch in range(num_epochs):
         train_hist['G_losses'].append(loss_g)
 
         # Output status to terminal
-        if num_iters % 100 == 0:
+        if iter % 100 == 0:
             print('[epoch.{} / num_epochs.{}]'.format(epoch, num_epochs))
             print('loss_d:{:.3f}, loss_g:{:.3f}'.format(loss_d, loss_g))
 
         # Output losses to TbX
-        writer.add_scalar('D_Loss', loss_d.item(), epoch)
-        writer.add_scalar('G_Loss', loss_g.item(), epoch)
+        # writer.add_scalar('D_Loss', loss_d.item(), epoch)
+        # writer.add_scalar('G_Loss', loss_g.item(), epoch)
+
+        epoch_end_time = time.time()
+        epoch_time = epoch_end_time - epoch_start_time
+
+        loss_d = torch.mean(torch.FloatTensor(D_losses))
+        loss_g = torch.mean(torch.FloatTensor(G_losses))
+
+        # Write end-of-epoch losses to training history
+        train_hist['D_losses'].append(loss_d)
+        train_hist['G_losses'].append(loss_g)
+        train_hist['per_epoch_time'].append(epoch_time)
+
+        # Output epoch summary to terminal
+        print_string = '[{}/{}] - epoch_time:{}, loss_d:{:.3f}, loss_g:{:.3f}'
+        print(print_string.format((epoch + 1), num_epochs, epoch_time,
+                                  loss_d, loss_g))
+
+        # Output end-of-epoch losses to TbX
+        # writer.add_scalar('D_Loss', loss_d.item(), epoch)
+        # writer.add_scalar('G_Loss', loss_g.item(), epoch)
+        # writer.add_scalar('Time_per_Epoch', train_hist['per_epoch_time'].avg,
+        #                    epoch)
+
+        # Save G's current-state outputs
+        ganfuncs.save_outputs(netG, out_dir, epoch, num_epochs, datetime,
+                              fixed_noise)
 
         num_iters += 1
-
-    epoch_end_time = time.time()
-    epoch_time = epoch_end_time - epoch_start_time
-
-    loss_d = torch.mean(torch.FloatTensor(D_losses))
-    loss_g = torch.mean(torch.FloatTensor(G_losses))
-
-    # Write end-of-epoch losses to training history
-    train_hist['D_losses'].append(loss_d)
-    train_hist['G_losses'].append(loss_g)
-    train_hist['per_epoch_time'].append(epoch_time)
-
-    # Output epoch summary to terminal
-    print_string = '[{}/{}] - epoch_time:{}, loss_d:{:.3f}, loss_g:{:.3f}'
-    print(print_string.format((epoch + 1), num_epochs, epoch_time, loss_d, loss_g))
-
-    # Output end-of-epoch losses to TbX
-    writer.add_scalar('D_Loss', loss_d.item(), epoch)
-    writer.add_scalar('G_Loss', loss_g.item(), epoch)
-
-    # Save current-state GAN outputs
-    ganfuncs.save_outputs(netG, out_dir, epoch, num_epochs, datetime,
-                          fixed_noise)
 
 ##############################
 # Training Complete
@@ -233,18 +251,23 @@ for epoch in range(num_epochs):
 #       weights/params
 #       loss plots
 ##############################
-print('#################')
-print('End of training')
-print('#################')
+# writer.close()
 
-writer.close()
+# Calculate training time
 end_time = time.time()
-total_time = end_time - start_time
-train_hist['total_time'].append(total_time)
-print('Total time:', total_time)
-print("Avg time per epoch: %.2f, total %d epochs time: %.2f" %
-     (torch.mean(torch.FloatTensor(train_hist['per_epoch_time'])),
-     num_epochs, total_time))
+total_time_s = end_time - start_time
+total_time_h = total_time_s % 60.0
+train_hist['total_time_s'].append(total_time_s)
+train_hist['total_time_h'].append(total_time_h)
+avg_time = torch.mean(torch.FloatTensor(train_hist['per_epoch_time']))
+
+# Print results to terminal
+print('Total time (s):{:.2f}'.format(total_time_s))
+print('Total time (hr):{:.2f}'.format(total_time_h))
+print('Total iterations:{}'.format(num_iters))
+print('Avg time per epoch:{:.2f}'.format(avg_time))
+print('num_epochs:{}'.format(num_epochs))
+print('total_time:{:.2f}'.format(total_time))
 
 # Save model parameters
 ext = '.tar'
