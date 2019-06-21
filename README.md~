@@ -12,5 +12,15 @@ Implementation of deep convolutional GAN framework. Architecture, initialization
 - [arXiv: 1511.06434v2: Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks](https://arxiv.org/pdf/1511.06434v2.pdf)
 - [arXiv: 1606.03498v1: Improved Techniques for Trainings GANs](https://arxiv.org/pdf/1606.03498.pdf) 
 
+#### larcv_dcgan (in-progress)
+Implementation of dcgan framework using LArCV1 particle gun data.
+
+#### TODO:
+
+Phase 1: Perform proof-of-concept of DCGAN performance using MNIST dataset (complete)
+
+Phase 2: Modify functioning DCGAN to work with LArCV1 particle gun data.
+
+Phase 3: Convert functioning DCGAN to WGAN-GP model.
 
 
