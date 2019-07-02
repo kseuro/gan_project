@@ -11,15 +11,16 @@
 import os, time
 import errno
 import torch
-import torch.nn               as nn
+import torch.nn                 as nn
 import torch.nn.parallel
-import torch.backends.cudnn   as cudnn
-import torch.optim            as optim
+import torch.backends.cudnn     as cudnn
+import torch.optim              as optim
 import torch.utils.data
-import torchvision.datasets   as dset
-import torchvision.transforms as transforms
-import torchvision.utils      as vutils
-import numpy                  as np
+import torch.utils.data.Dataset as Dataset
+import torchvision.datasets     as dset
+import torchvision.transforms   as transforms
+import torchvision.utils        as vutils
+import numpy                    as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -32,69 +33,80 @@ from   datetime import datetime
 ##############################
 # Helper classes
 ##############################
-class SegData:
-    def __init__(self):
-        self.dim     = None
-        self.images  = None  # adc image
-        self.labels  = None  # labels
-        self.weights = None  # weights
-        return
-
-    def shape(self):
-        if self.dim is None:
-            raise ValueError("SegData instance hasn't been filled yet")
-        return self.dim
-
-class LArCV1Dataset:
+class CenterCropLongEdge(object):
+  """Crops the given PIL Image on the long edge.
+  Args:
+      size (sequence or int): Desired output size of the crop. If size is an
+          int instead of sequence like (h, w), a square crop (size, size) is
+          made.
+  """
+  def __call__(self, img):
     """
-        Class for creating numpy image data objects from ROOT files.
-        Object needs cfgfile string in order to locate and load ROOT files.
-        methods: init: creates an instan of data file interface.
-                 getbatch: returns LArCV image as torch tensor.
+    Args:
+        img (PIL Image): Image to be cropped.
+    Returns:
+        PIL Image: Cropped image.
     """
-    def __init__(self, name, cfgfile ):
-        # inputs
-        # cfgfile: path to configuration.
-        self.name = name
-        self.cfgfile = cfgfile
-        return
+    return transforms.functional.center_crop(img, min(img.size))
 
-    def init(self):
-        self.io = larcv.ThreadDatumFiller(self.name)
-        self.io.configure(self.cfgfile)
-        self.nentries = self.io.get_n_entries()
-        self.io.set_next_index(0)
-        print("[LArCV1Data] able to create ThreadDatumFiller")
-        return
+  def __repr__(self):
+    return self.__class__.__name__
 
-    def getbatch(self, batchsize):
-        self.io.batch_process(batchsize)
-        time.sleep(0.1)
-        itry = 0
-        while self.io.thread_running() and itry<100:
-            time.sleep(0.01)
-            itry += 1
-        if itry>=100:
-            raise RuntimeError("Batch Loader timed out")
-        # fill SegData object
-        data = SegData()
+class LArCV1Dataset(Dataset):
+  """A generic data loader where the images are arranged in this way:
 
-        dimv = self.io.dim() # c++ std vector through ROOT bindings
-        self.dim  = (dimv[0], dimv[1], dimv[2], dimv[3] )
-        self.dim3 = (dimv[0], dimv[2], dimv[3] )
+      root/class1/xxx.png
+      root/class2/xxy.png
+      root/class3/xxz.png
 
-        # numpy arrays
-        data.np_images    = np.zeros( self.dim,  dtype=np.float32 )
-        print("BEFORE DATA.NP_IMAGES")
-        input()
-        # Dataloader Seg Faults at this line
-        data.np_images[:] = larcv.as_ndarray(self.io.data()).reshape(self.dim)[:]
-        # Dataloader Seg Faults at this line
+  Args:
+      root (string): Root directory path.
+      transform (callable, optional): A function/transform that takes in an PIL image
+          and returns a transformed version. E.g, ``transforms.RandomCrop``
+      target_transform (callable, optional): A function/transform that takes in the
+          target and transforms it.
+      loader (callable, optional): A function to load an image given its path.
 
-        # pytorch tensors
-        data.images = torch.from_numpy(data.np_images)
+   Attributes:
+      classes (list): List of the class names.
+      class_to_idx (dict): Dict with items (class_name, class_index).
+      imgs (list): List of (image path, class_index) tuples
+  """
+    def __init__(self, root, transform = None, target_transform = None,
+                 loader = default_loader):
 
-        return data
+    classes, class_to_idx = find_classes(root)
+
+    self.root             = root
+    self.imgs             = imgs
+    self.classes          = classes
+    self.class_to_idx     = class_to_idx
+    self.transform        = transform
+    self.target_transform = target_transform
+    self.loader           = loader
+
+  def __getitem__(self, index):
+    """
+    Args:
+        index (int): Index
+
+    Returns:
+        tuple: (image, target) where target is class_index of the target class.
+    """
+
+    path, target = self.imgs[index]
+    img = self.loader(str(path))
+
+    if self.transform is not None:
+      img = self.transform(img)
+
+    if self.target_transform is not None:
+      target = self.target_transform(target)
+
+    return img, int(target)
+
+  def __len__(self):
+    return len(self.imgs)
 
 class Print(nn.Module):
     '''
@@ -112,6 +124,12 @@ class Print(nn.Module):
 ##############################
 # Helper functions
 ##############################
+def find_classes(dir):
+    classes = [d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))]
+    classes.sort()
+    class_to_idx = {classes[i]: i for i in range(len(classes))}
+    return classes, class_to_idx
+
 def weights_init(m):
     """
     Custon weight init based on DCGAN paper recommendations of

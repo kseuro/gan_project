@@ -6,7 +6,6 @@
 ##############################
 # Import scripts
 ##############################
-## Torch, Numpy, Matplotlib
 import os, time
 import errno
 import torch
@@ -22,6 +21,7 @@ import numpy                  as np
 import matplotlib
 matplotlib.use('Agg') # Set matplotlib backend to Agg for I/O
 import matplotlib.pyplot      as plt
+from torch.utils.data import Dataloader
 
 ## Larcv, ROOT, functions, models
 import itertools
@@ -50,16 +50,25 @@ lr         = 0.0002 # Should be 0.0002 per DCGAN paper
 beta1      = 0.5    # Should be 0.5 per DCGAN paper
 z_dim      = 1      # Defines batch size of fixed or random noise vectors
 num_iters  = 0      # Start at zero
+data_root  = ''
 
 ##############################
 # Data and logging
 ##############################
-# Data configuration
-cfg_head = "ThreadDatumFillerTrain"
-cfg_file = "/home/kseuro/gan_project/larcv_dcgan/segfiller_train.cfg"
+# Data transformations
+## Greyscale transforms:
+norm_mean = [0.5]
+norm_std  = [0.5]
+train_transform = transforms.Compose( [ CenterCropLongEdge(),
+                                        transforms.Resize(image_size),
+                                        transforms.ToTensor(),
+                                        transforms.Normalize(norm_mean,
+                                                             norm_std)] )
 
-# Load LArCV1Data
-dataloader = ganfuncs.LArCV1Dataset(cfg_head, cfg_file)
+train_set = ganfuncs.LArCV1Dataset(root=data_root, transform=train_transform)
+dataloader = Dataloader(train_set, batch_size = batch_size,
+                          shuffle = True, num_workers = workers)
+
 dataloader.init()
 dataloader.getbatch(batch_size) # Seg fault here
 
@@ -68,8 +77,8 @@ n_batches  = num_images / batch_size
 
 print(num_images)
 print(n_batches)
-
 input()
+
 # TensorboardX
 # writer = SummaryWriter('/media/hdd1/kai/tensorBoard/runs/gan_project')
 
