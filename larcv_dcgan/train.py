@@ -21,7 +21,8 @@ import numpy                  as np
 import matplotlib
 matplotlib.use('Agg') # Set matplotlib backend to Agg for I/O
 import matplotlib.pyplot      as plt
-from torch.utils.data import Dataloader
+from torch.utils.data import DataLoader
+from torchvision.transforms.functional import center_crop
 
 ## Larcv, ROOT, functions, models
 import itertools
@@ -37,50 +38,44 @@ from   tensorboardX import SummaryWriter
 ##############################
 # Inputs
 ##############################
-workers    = 2      # dataloader worker threads
-batch_size = 5      # Batch size during training
-image_size = 512    # Spatial size of training images.
+# Config dicts
+dirs = {'data_root': '/media/disk1/kai/larcv_png_1_ch/',
+        'tb_data':   '/media/disk1/kai/larcv_dcgan_experiment/tb_data/',
+        'save_dir':  '/media/disk1/kai/larcv_dcgan_experiment/save_dir'}
+params = {'num_workers': 2,
+          'batch_size': 10,
+          'shuffle': True,
+          'num_workers': 2}
+image_size = 512    # size of larcv_png images
+num_epochs = 1      # number of epochs
 nc         = 1      # number of color channels [rgb = 3] [bw = 1]
 ngpu       = 1      # 0: CPU mode; > 1: MultiGPU mode
 nz         = 100    # length of the latent vector
 ngf        = 128    # depth of generator feature maps
 ndf        = 128    # depth of discriminator feature maps
-num_epochs = 1      # number of epochs
 lr         = 0.0002 # Should be 0.0002 per DCGAN paper
 beta1      = 0.5    # Should be 0.5 per DCGAN paper
 z_dim      = 1      # Defines batch size of fixed or random noise vectors
-num_iters  = 0      # Start at zero
-data_root  = ''
+tbX        = False  # TensorBoardX option
 
 ##############################
 # Data and logging
 ##############################
+# TensorboardX
+if tbX:
+    writer = SummaryWriter(dirs['tb_data'])
+
 # Data transformations
-## Greyscale transforms:
-norm_mean = [0.5]
-norm_std  = [0.5]
-train_transform = transforms.Compose( [ CenterCropLongEdge(),
-                                        transforms.Resize(image_size),
-                                        transforms.ToTensor(),
+norm_mean, norm_std = [0.5], [0.5] # Greyscale
+train_transform = transforms.Compose( [ transforms.ToTensor(),
                                         transforms.Normalize(norm_mean,
                                                              norm_std)] )
 
-train_set = ganfuncs.LArCV1Dataset(root=data_root, transform=train_transform)
-dataloader = Dataloader(train_set, batch_size = batch_size,
-                          shuffle = True, num_workers = workers)
-
-dataloader.init()
-dataloader.getbatch(batch_size) # Seg fault here
-
-num_images = dataloader.io.get_n_entries() # Scalar
-n_batches  = num_images / batch_size
-
-print(num_images)
-print(n_batches)
-input()
-
-# TensorboardX
-# writer = SummaryWriter('/media/hdd1/kai/tensorBoard/runs/gan_project')
+train_dataset = dset.ImageFolder(root=dirs['data_root'],
+                                 transform=train_transform)
+dataloader = DataLoader(train_dataset, **params)
+num_images = len(train_dataset)                # number of training examples
+num_iters  = num_images / params['batch_size'] # num iterations / epoch
 
 # Select GPU or CPU
 device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
@@ -88,7 +83,6 @@ device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
 
 # Fixed noise vector for testing G's performance
 fixed_noise = torch.randn( (z_dim * z_dim, nz) ).view(-1, nz, 1, 1).to(device)
-
 
 ##############################
 # Instantiation
@@ -98,9 +92,9 @@ netG = GNet(nc, nz, ngf)
 netD = DNet(nc, ndf)
 
 # MultiGPU option
-# if (device.type == 'cuda') and (ngpu > 1):
-#     netG = nn.DataParallel(netG, list(range(ngpu)))
-#     netD = nn.DataParallel(netD, list(range(ngpu)))
+if (device.type == 'cuda') and (ngpu > 1):
+    netG = nn.DataParallel(netG, list(range(ngpu)))
+    netD = nn.DataParallel(netD, list(range(ngpu)))
 
 # Custom weight init
 netG.apply(ganfuncs.weights_init) # weights on cpu
@@ -122,8 +116,7 @@ optimD = optim.Adam(netD.parameters(), lr = lr, betas = (beta1, 0.999))
 train_hist = ganfuncs.train_hist()
 
 # Times and save directory
-out_dir = '/media/hdd1/kai/projects/gan_project/larcv-dcgan/'
-start_time, out_dir, now = ganfuncs.train_start(out_dir, time.time())
+start_time, out_dir, now = ganfuncs.train_start(dirs['save_dir'], time.time())
 
 ##############################
 # Training Loop
@@ -229,8 +222,9 @@ for epoch in range(num_epochs):
             print('loss_d:{:.3f}, loss_g:{:.3f}'.format(loss_d, loss_g))
 
         # Output losses to TbX
-        # writer.add_scalar('D_Loss', loss_d.item(), epoch)
-        # writer.add_scalar('G_Loss', loss_g.item(), epoch)
+        if tbX:
+            writer.add_scalar('D_Loss', loss_d.item(), epoch)
+            writer.add_scalar('G_Loss', loss_g.item(), epoch)
 
         epoch_end_time = time.time()
         epoch_time = epoch_end_time - epoch_start_time
@@ -249,10 +243,11 @@ for epoch in range(num_epochs):
                                   loss_d, loss_g))
 
         # Output end-of-epoch losses to TbX
-        # writer.add_scalar('D_Loss', loss_d.item(), epoch)
-        # writer.add_scalar('G_Loss', loss_g.item(), epoch)
-        # writer.add_scalar('Time_per_Epoch', train_hist['per_epoch_time'].avg,
-        #                    epoch)
+        if tbX:
+            writer.add_scalar('D_Loss', loss_d.item(), epoch)
+            writer.add_scalar('G_Loss', loss_g.item(), epoch)
+            writer.add_scalar('Time_per_Epoch', train_hist['per_epoch_time'].avg,
+                           epoch)
 
         # Save G's current-state outputs
         ganfuncs.save_outputs(netG, out_dir, epoch, num_epochs, datetime,
@@ -266,7 +261,8 @@ for epoch in range(num_epochs):
 #       weights/params
 #       loss plots
 ##############################
-# writer.close()
+if tbX:
+    writer.close()
 
 # Calculate training time
 end_time = time.time()
@@ -290,9 +286,9 @@ ganfuncs.save_model(netG, out_dir, ext, G = True)  # G params
 ganfuncs.save_model(netD, out_dir, ext, G = False) # D params
 
 # Plot losses
-ganfuncs.plot_losses(out_dir, datetime,
+ganfuncs.plot_losses(dirs['save_dir'], datetime,
                      train_hist['G_losses'],
                      train_hist['D_losses'])
 
 # Save evaluation images as animation
-ganfuncs.save_ani(out_dir, num_epochs, fixed = True, random = True)
+ganfuncs.save_ani(dirs['save_dir'], num_epochs, fixed = True, random = True)

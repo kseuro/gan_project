@@ -15,8 +15,7 @@ import torch.nn                 as nn
 import torch.nn.parallel
 import torch.backends.cudnn     as cudnn
 import torch.optim              as optim
-import torch.utils.data
-import torch.utils.data.Dataset as Dataset
+from torch.utils.data import Dataset, DataLoader
 import torchvision.datasets     as dset
 import torchvision.transforms   as transforms
 import torchvision.utils        as vutils
@@ -52,62 +51,6 @@ class CenterCropLongEdge(object):
   def __repr__(self):
     return self.__class__.__name__
 
-class LArCV1Dataset(Dataset):
-  """A generic data loader where the images are arranged in this way:
-
-      root/class1/xxx.png
-      root/class2/xxy.png
-      root/class3/xxz.png
-
-  Args:
-      root (string): Root directory path.
-      transform (callable, optional): A function/transform that takes in an PIL image
-          and returns a transformed version. E.g, ``transforms.RandomCrop``
-      target_transform (callable, optional): A function/transform that takes in the
-          target and transforms it.
-      loader (callable, optional): A function to load an image given its path.
-
-   Attributes:
-      classes (list): List of the class names.
-      class_to_idx (dict): Dict with items (class_name, class_index).
-      imgs (list): List of (image path, class_index) tuples
-  """
-    def __init__(self, root, transform = None, target_transform = None,
-                 loader = default_loader):
-
-    classes, class_to_idx = find_classes(root)
-
-    self.root             = root
-    self.imgs             = imgs
-    self.classes          = classes
-    self.class_to_idx     = class_to_idx
-    self.transform        = transform
-    self.target_transform = target_transform
-    self.loader           = loader
-
-  def __getitem__(self, index):
-    """
-    Args:
-        index (int): Index
-
-    Returns:
-        tuple: (image, target) where target is class_index of the target class.
-    """
-
-    path, target = self.imgs[index]
-    img = self.loader(str(path))
-
-    if self.transform is not None:
-      img = self.transform(img)
-
-    if self.target_transform is not None:
-      target = self.target_transform(target)
-
-    return img, int(target)
-
-  def __len__(self):
-    return len(self.imgs)
-
 class Print(nn.Module):
     '''
         Outputs the shape of convolutional layers in model.
@@ -129,6 +72,27 @@ def find_classes(dir):
     classes.sort()
     class_to_idx = {classes[i]: i for i in range(len(classes))}
     return classes, class_to_idx
+
+def make_dataset(dir, class_to_idx):
+  images = []
+  dir = os.path.expanduser(dir)
+  for target in sorted(os.listdir(dir)):
+    d = os.path.join(dir, target)
+    if not os.path.isdir(d):
+      continue
+
+    for root, _, fnames in sorted(os.walk(d)):
+      for fname in sorted(fnames):
+        if is_image_file(fname):
+          path = os.path.join(root, fname)
+          item = (path, class_to_idx[target])
+          images.append(item)
+    length = len(images)
+    for i in range(length - length/2, length):
+      print(images[i])
+    input('Waiting for input')
+
+  return images
 
 def weights_init(m):
     """
