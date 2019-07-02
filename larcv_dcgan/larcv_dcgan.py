@@ -15,7 +15,7 @@ import torch.utils.data
 import torchvision.datasets   as dset
 import torchvision.transforms as transforms
 import torchvision.utils      as vutils
-
+from ganfuncs import Print
 ##############################
 # Networks
 ##############################
@@ -97,18 +97,18 @@ class DNet(torch.nn.Module):
         super(DNet, self).__init__()
         self.main = nn.Sequential(
             nn.Conv2d(nc, ndf, 4, 2, 1, bias = False),
-            # Print(),
+            Print(),
             nn.LeakyReLU(0.2, inplace = True),
             nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias = False),
-            # Print(),
+            Print(),
             nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace = True),
             nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias = False),
-            # Print(),
+            Print(),
             nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace = True),
             nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias = False),
-            # Print(),
+            Print(),
             nn.BatchNorm2d(ndf * 8),
             nn.Conv2d(ndf * 8, 1, 4, 1, 0),
             nn.Sigmoid()

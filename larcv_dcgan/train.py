@@ -48,7 +48,7 @@ params = {'num_workers': 2,
           'num_workers': 2}
 image_size = 512    # size of larcv_png images
 num_epochs = 1      # number of epochs
-nc         = 1      # number of color channels [rgb = 3] [bw = 1]
+nc         = 1      # number of color channels
 ngpu       = 1      # 0: CPU mode; > 1: MultiGPU mode
 nz         = 100    # length of the latent vector
 ngf        = 128    # depth of generator feature maps
@@ -66,11 +66,13 @@ if tbX:
     writer = SummaryWriter(dirs['tb_data'])
 
 # Data transformations
-norm_mean, norm_std = [0.5], [0.5] # Greyscale
-train_transform = transforms.Compose( [ transforms.ToTensor(),
+norm_mean, norm_std = [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]
+train_transform = transforms.Compose( [ transforms.Grayscale(num_output_channels=1),
+                                        transforms.Resize(image_size),
+                                        transforms.CenterCrop(image_size),
+                                        transforms.ToTensor(),
                                         transforms.Normalize(norm_mean,
                                                              norm_std)] )
-
 train_dataset = dset.ImageFolder(root=dirs['data_root'],
                                  transform=train_transform)
 dataloader = DataLoader(train_dataset, **params)
@@ -129,7 +131,8 @@ for epoch in range(num_epochs):
 
     epoch_start_time = time.time()
 
-    for data, _ in dataloader:
+    # For each batch in the dataloader
+    for batch_idx, data in enumerate(dataloader, 0):
         '''
         - Discriminator training
             - Goal of D is to maximize prob of correctly classifying a given
@@ -138,34 +141,34 @@ for epoch in range(num_epochs):
         '''
         netD.zero_grad()
 
-        # Establish soft data labels
-        # Flip target on BCE loss: real: 1->0, fake: 0->1
+        # Format batch
+        b_size = data[0].size(0)
+
+        ## Establish soft data labels
+        ## Flip target on BCE loss: real: 1->0, fake: 0->1
         real_label = random.uniform(0, 0.1)
         fake_label = random.uniform(0.9, 1.0)
 
-        # real target
-        y_real_ = torch.full( (mini_batch,), real_label, device = device)
+        ## real target
+        y_real_ = torch.full((b_size,), real_label, device=device)
         y_real_ = y_real_.view(-1, 1, 1, 1)
 
-        # fake target
-        y_fake_ = torch.full( (mini_batch,), fake_label, device = device)
+        ## fake target
+        y_fake_ = torch.full((b_size,), fake_label, device=device)
         y_fake_ = y_fake_.view(-1, 1, 1, 1)
 
-        # Create data object on GPU
-        data = dataloader.getbatch(batchsize) # torch tensor training images
-        larcv_imgs = torch.Tensor(data.images.to(device))
-
         # Train D on a real batch
-        D_result = netD(larcv_imgs)               # Forward pass through D
-        D_real_loss = BCE_loss(D_result, y_real_) # Calc loss log(D(x))
+        real_batch  = data[0].to(device)
+        D_result    = netD(real_batch)                # Forward pass through D
+        D_real_loss = BCE_loss(D_result, y_real_)     # Calc loss log(D(x))
 
         # Generate fake batch
-        z_ = ganfuncs.random_noise(z_dim, nz)     # ([25, 100, 1, 1])
-        G_result = netG(z_)                       # ([25, 1, 64, 64])
+        z_ = ganfuncs.random_noise(z_dim, nz)         # ([25, 100, 1, 1])
+        G_result = netG(z_)                           # ([25, 1, 64, 64])
 
         # Train D on fake batch
-        D_result = netD(G_result)                 # Forward pass through D
-        D_fake_loss = BCE_loss(D_result, y_fake_) # Calc loss log(D(G(z))
+        D_result     = netD(G_result)                 # Forward pass through D
+        D_fake_loss  = BCE_loss(D_result, y_fake_)    # Calc loss log(D(G(z))
         D_fake_score = D_result.data.mean()
 
         # Accumulate losses and backprop
@@ -246,8 +249,8 @@ for epoch in range(num_epochs):
         if tbX:
             writer.add_scalar('D_Loss', loss_d.item(), epoch)
             writer.add_scalar('G_Loss', loss_g.item(), epoch)
-            writer.add_scalar('Time_per_Epoch', train_hist['per_epoch_time'].avg,
-                           epoch)
+            writer.add_scalar('Time_per_Epoch',
+                              train_hist['per_epoch_time'].avg, epoch)
 
         # Save G's current-state outputs
         ganfuncs.save_outputs(netG, out_dir, epoch, num_epochs, datetime,
