@@ -1,7 +1,7 @@
 #!/bin/bash
 
 home=$PWD
-source ~/setup_root6.sh
+source /usr/local/root6-python3/bin/thisroot.sh
 source ~/setup_cuda.sh
 
 cd larcv
@@ -14,4 +14,4 @@ source setenv.sh
 
 cd $home
 
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=0,1,2

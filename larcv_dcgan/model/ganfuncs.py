@@ -25,11 +25,26 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import itertools
 import imageio
+import ROOT
+from   larcv    import larcv
 from   datetime import datetime
 
 ##############################
 # Helper classes
 ##############################
+class SegData:
+    def __init__(self):
+        self.dim     = None
+        self.images  = None  # adc image
+        self.labels  = None  # labels
+        self.weights = None  # weights
+        return
+
+    def shape(self):
+        if self.dim is None:
+            raise ValueError("SegData instance hasn't been filled yet")
+        return self.dim
+
 class LArCV1Dataset:
     """
         Class for creating numpy image data objects from ROOT files.
@@ -61,16 +76,20 @@ class LArCV1Dataset:
             itry += 1
         if itry>=100:
             raise RuntimeError("Batch Loader timed out")
-
         # fill SegData object
         data = SegData()
+
         dimv = self.io.dim() # c++ std vector through ROOT bindings
         self.dim  = (dimv[0], dimv[1], dimv[2], dimv[3] )
         self.dim3 = (dimv[0], dimv[2], dimv[3] )
 
         # numpy arrays
         data.np_images    = np.zeros( self.dim,  dtype=np.float32 )
+        print("BEFORE DATA.NP_IMAGES")
+        input()
+        # Dataloader Seg Faults at this line
         data.np_images[:] = larcv.as_ndarray(self.io.data()).reshape(self.dim)[:]
+        # Dataloader Seg Faults at this line
 
         # pytorch tensors
         data.images = torch.from_numpy(data.np_images)

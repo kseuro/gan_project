@@ -1,0 +1,6 @@
+export LARCV_OPENCV=0
+source setenv.sh
+source configure.sh
+export LARCV_OPENCV=0
+source setenv.sh
+source configure.sh

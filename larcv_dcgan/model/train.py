@@ -31,7 +31,7 @@ import random
 import ROOT
 from   larcv        import larcv
 from   datetime     import datetime
-from   dcgan        import GNet, DNet
+from   larcv_dcgan  import GNet, DNet
 from   tensorboardX import SummaryWriter
 
 ##############################
@@ -56,14 +56,20 @@ num_iters  = 0      # Start at zero
 ##############################
 # Data configuration
 cfg_head = "ThreadDatumFillerTrain"
-cfg_file = "~/Kai/deeplearnphysics/pytorch/gan_project/larcv_dcgan/segfiller_train.cfg"
-with open(crg_file, 'r') as cfg:
-    cfg_string = cfg.read()
+cfg_file = "/home/kseuro/gan_project/larcv_dcgan/segfiller_train.cfg"
 
 # Load LArCV1Data
-dataloader = LArCV1Dataset(cfg_head, cfg_string)
+dataloader = ganfuncs.LArCV1Dataset(cfg_head, cfg_file)
 dataloader.init()
+dataloader.getbatch(batch_size) # Seg fault here
 
+num_images = dataloader.io.get_n_entries() # Scalar
+n_batches  = num_images / batch_size
+
+print(num_images)
+print(n_batches)
+
+input()
 # TensorboardX
 # writer = SummaryWriter('/media/hdd1/kai/tensorBoard/runs/gan_project')
 
@@ -121,7 +127,7 @@ for epoch in range(num_epochs):
 
     epoch_start_time = time.time()
 
-    for iter in range(0, n_batches):
+    for data, _ in dataloader:
         '''
         - Discriminator training
             - Goal of D is to maximize prob of correctly classifying a given
