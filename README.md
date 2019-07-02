@@ -12,5 +12,6 @@ Implementation of deep convolutional GAN framework. Architecture, initialization
 - [arXiv: 1511.06434v2: Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks](https://arxiv.org/pdf/1511.06434v2.pdf)
 - [arXiv: 1606.03498v1: Improved Techniques for Trainings GANs](https://arxiv.org/pdf/1606.03498.pdf) 
 
-
+#### larcv_dcgan
+Extension of above dcgan framework designed to work with single channel larcv images that have been converted to PNG format.
 
