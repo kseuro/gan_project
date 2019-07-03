@@ -41,22 +41,23 @@ from   tensorboardX import SummaryWriter
 # Config dicts
 dirs = {'data_root': '/media/disk1/kai/larcv_png_1_ch/',
         'tb_data':   '/media/disk1/kai/larcv_dcgan_experiment/tb_data/',
-        'save_dir':  '/media/disk1/kai/larcv_dcgan_experiment/save_dir'}
+        'save_dir':  '/media/disk1/kai/larcv_dcgan_experiment/save_dir/'}
 params = {'num_workers': 2,
-          'batch_size': 10,
+          'batch_size': 16,
           'shuffle': True,
-          'num_workers': 2}
+          'num_workers': 4}
 image_size = 512    # size of larcv_png images
 num_epochs = 1      # number of epochs
+num_iters  = 0      # number of iterations to complete training
 nc         = 1      # number of color channels
-ngpu       = 1      # 0: CPU mode; > 1: MultiGPU mode
+ngpu       = 2      # 0: CPU mode; > 1: MultiGPU mode
 nz         = 100    # length of the latent vector
 ngf        = 128    # depth of generator feature maps
 ndf        = 128    # depth of discriminator feature maps
 lr         = 0.0002 # Should be 0.0002 per DCGAN paper
 beta1      = 0.5    # Should be 0.5 per DCGAN paper
-z_dim      = 1      # Defines batch size of fixed or random noise vectors
-tbX        = False  # TensorBoardX option
+z_dim      = params['batch_size'] # Defines batch size of fixed or random noise vectors
+tbX        = True  # TensorBoardX option
 
 ##############################
 # Data and logging
@@ -76,15 +77,15 @@ train_transform = transforms.Compose( [ transforms.Grayscale(num_output_channels
 train_dataset = dset.ImageFolder(root=dirs['data_root'],
                                  transform=train_transform)
 dataloader = DataLoader(train_dataset, **params)
-num_images = len(train_dataset)                # number of training examples
-num_iters  = num_images / params['batch_size'] # num iterations / epoch
+# num_images = len(train_dataset)                # number of training examples
+# num_iters  = num_images / params['batch_size'] # num iterations / epoch
 
 # Select GPU or CPU
-device = torch.device("cuda:1" if (torch.cuda.is_available() and ngpu > 0)
+device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0)
                       else "cpu")
 
 # Fixed noise vector for testing G's performance
-fixed_noise = torch.randn( (z_dim * z_dim, nz) ).view(-1, nz, 1, 1).to(device)
+fixed_noise = torch.randn((z_dim, nz)).view(-1, nz, 1, 1).to(device)
 
 ##############################
 # Instantiation
@@ -126,13 +127,13 @@ start_time, out_dir, now = ganfuncs.train_start(dirs['save_dir'], time.time())
 for epoch in range(num_epochs):
 
     # List of loss values for TB and plotting
-    D_Losses = []
-    G_Losses = []
+    D_losses = []
+    G_losses = []
 
     epoch_start_time = time.time()
 
     # For each batch in the dataloader
-    for batch_idx, data in enumerate(dataloader, 0):
+    for data, _ in dataloader:
         '''
         - Discriminator training
             - Goal of D is to maximize prob of correctly classifying a given
@@ -142,8 +143,9 @@ for epoch in range(num_epochs):
         netD.zero_grad()
 
         # Format batch
-        b_size = data[0].size(0)
-
+        # b_size = data.size(0)
+        b_size = 16
+        
         ## Establish soft data labels
         ## Flip target on BCE loss: real: 1->0, fake: 0->1
         real_label = random.uniform(0, 0.1)
@@ -158,13 +160,13 @@ for epoch in range(num_epochs):
         y_fake_ = y_fake_.view(-1, 1, 1, 1)
 
         # Train D on a real batch
-        real_batch  = data[0].to(device)
+        real_batch  = data.to(device)
         D_result    = netD(real_batch)                # Forward pass through D
         D_real_loss = BCE_loss(D_result, y_real_)     # Calc loss log(D(x))
 
         # Generate fake batch
-        z_ = ganfuncs.random_noise(z_dim, nz)         # ([25, 100, 1, 1])
-        G_result = netG(z_)                           # ([25, 1, 64, 64])
+        z_ = ganfuncs.random_noise(z_dim, nz, device)
+        G_result = netG(z_)
 
         # Train D on fake batch
         D_result     = netD(G_result)                 # Forward pass through D
@@ -195,13 +197,13 @@ for epoch in range(num_epochs):
         netG.zero_grad()
 
         # Generate random noise
-        z_ = ganfuncs.random_noise(z_dim, nz) # [25, 100, 1, 1]
+        z_ = ganfuncs.random_noise(z_dim, nz, device)
 
         # Push noise through G
-        G_result = netG(z_)                   # [25, 1, 64, 64]
+        G_result = netG(z_)
 
         # Push G's output through D
-        D_result = netD(G_result)             # [25, 1, 1, 1]
+        D_result = netD(G_result)
 
         # Calculate loss and backprop
         G_train_loss = BCE_loss(D_result, y_real_)
@@ -220,7 +222,7 @@ for epoch in range(num_epochs):
         train_hist['G_losses'].append(loss_g)
 
         # Output status to terminal
-        if iter % 100 == 0:
+        if num_iters % 100 == 0:
             print('[epoch.{} / num_epochs.{}]'.format(epoch, num_epochs))
             print('loss_d:{:.3f}, loss_g:{:.3f}'.format(loss_d, loss_g))
 
@@ -249,12 +251,10 @@ for epoch in range(num_epochs):
         if tbX:
             writer.add_scalar('D_Loss', loss_d.item(), epoch)
             writer.add_scalar('G_Loss', loss_g.item(), epoch)
-            writer.add_scalar('Time_per_Epoch',
-                              train_hist['per_epoch_time'].avg, epoch)
 
         # Save G's current-state outputs
         ganfuncs.save_outputs(netG, out_dir, epoch, num_epochs, datetime,
-                              fixed_noise)
+                              fixed_noise, device)
 
         num_iters += 1
 

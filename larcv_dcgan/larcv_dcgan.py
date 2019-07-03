@@ -23,13 +23,13 @@ class GNet(torch.nn.Module):
     """
     Designed to map a latent space vector (z) to data-space. Since the data
         are images, the conversion of z to data-space means creating an image
-        with the same size as the training images (1x28x28).
+        with the same size as the training images (1x512x512) = 262,144
     In practice, this is done with a series of strided 2D conv-transpose
         layers, paired with a 2D batch-norm layer and ReLU activation.
         The output is passed through a Tanh function to map it to the input
         data range of [-1, 1].
     Inputs:
-        - nc:  number of color channels    (rgb = 3) (bw = 1)
+        - nc:  number of color channels (bw = 1)
         - nz:  length of the latent vector (100)
         - ngf: depth of feature maps carried through generator
         - Transposed convolution is also known as fractionally-strided conv.
@@ -44,25 +44,61 @@ class GNet(torch.nn.Module):
     def __init__(self, nc, nz, ngf):
         super(GNet, self).__init__()
         self.main = nn.Sequential(
-            # Print(),
-            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias = False),
-            # Print(),
+            # Print(), # [1, 100, 1, 1]
+            nn.ConvTranspose2d(in_channels = nz, out_channels = ngf * 8,
+                               kernel_size = 4, stride = 1, padding = 0,
+                               output_padding = 0, groups = 1, bias = False,
+                               dilation = 1),
+            # Print(), # [1, 1024, 4, 4]
             nn.BatchNorm2d(ngf * 8),
             nn.ReLU(True),
-            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias = False),
-            # Print(),
+            nn.ConvTranspose2d(in_channels = ngf * 8, out_channels = ngf * 7,
+                               kernel_size = 4, stride = 2, padding = 1,
+                               output_padding = 0, groups = 1, bias = False,
+                               dilation = 1),
+            # Print(), # [1, 896, 8, 8]
+            nn.BatchNorm2d(ngf * 7),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(in_channels = ngf * 7, out_channels = ngf * 6,
+                               kernel_size = 4, stride = 2, padding = 1,
+                               output_padding = 0, groups = 1, bias = False,
+                               dilation = 1),
+            # Print(), # [1, 768, 16, 16]
+            nn.BatchNorm2d(ngf * 6),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(in_channels = ngf * 6, out_channels = ngf * 5,
+                               kernel_size = 4, stride = 2, padding = 1,
+                               output_padding = 0, groups = 1, bias = False,
+                               dilation = 1),
+            # Print(), # [1, 640, 32, 32]
+            nn.BatchNorm2d(ngf * 5),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(in_channels = ngf * 5, out_channels = ngf * 4,
+                               kernel_size = 4, stride = 2, padding = 1,
+                               output_padding = 0, groups = 1, bias = False,
+                               dilation = 1),
+            # Print(), # [1, 512, 64, 64]
             nn.BatchNorm2d(ngf * 4),
             nn.ReLU(True),
-            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias = False),
-            # Print(),
+            nn.ConvTranspose2d(in_channels = ngf * 4, out_channels = ngf * 3,
+                               kernel_size = 4, stride = 2, padding = 1,
+                               output_padding = 0, groups = 1, bias = False,
+                               dilation = 1),
+            # Print(), # [1, 384, 128, 128]
+            nn.BatchNorm2d(ngf * 3),
+            nn.ReLU(True),
+            nn.ConvTranspose2d(in_channels = ngf * 3, out_channels = ngf * 2,
+                               kernel_size = 4, stride = 2, padding = 1,
+                               output_padding = 0, groups = 1, bias = False,
+                               dilation = 1),
+            # Print(), # [1, 256, 128, 128]
             nn.BatchNorm2d(ngf * 2),
             nn.ReLU(True),
-            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias = False),
-            # Print(),
-            nn.BatchNorm2d(ngf),
-            nn.ReLU(True),
-            nn.ConvTranspose2d(ngf, nc, 4, 2, 1, bias = False),
-            # Print(),
+            nn.ConvTranspose2d(in_channels = ngf * 2, out_channels = nc,
+                               kernel_size = 4, stride = 2, padding = 1,
+                               output_padding = 0, groups = 1, bias = False,
+                               dilation = 1),
+            # Print(), # [1, 1, 512, 512]
             nn.Tanh()
         )
 
@@ -82,7 +118,7 @@ class DNet(torch.nn.Module):
         its own pooling function. BatchNorm and LeakyReLU functions promote
         good gradient flow - critical to the learning of both G and D.
     Inputs:
-        - nc:  number of color channels (rgb = 3) (bw = 1)
+        - nc:  number of color channels (bw = 1)
         - ndf: sets depth of feature maps propagated through discriminator
     Convolutional output volume:
         O = [i + 2*p - K - (K-1)*(d-1)] / S + 1
@@ -96,21 +132,44 @@ class DNet(torch.nn.Module):
     def __init__(self, nc, ndf):
         super(DNet, self).__init__()
         self.main = nn.Sequential(
-            nn.Conv2d(nc, ndf, 4, 2, 1, bias = False),
-            Print(),
+            nn.Conv2d(in_channels = nc, out_channels = ndf, kernel_size = 4,
+                      stride = 2, padding = 1, dilation = 1, groups = 1,
+                      bias = False),
+            # Print(), # torch.Size([10, 128, 256, 256])
             nn.LeakyReLU(0.2, inplace = True),
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias = False),
-            Print(),
+            nn.Conv2d(in_channels = ndf, out_channels = ndf * 2, kernel_size = 4,
+                      stride = 2, padding = 1, dilation = 1, groups = 1,
+                      bias = False),
+            # Print(), # torch.Size([10, 256, 128, 128])
             nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace = True),
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias = False),
-            Print(),
+            nn.Conv2d(in_channels = ndf * 2, out_channels = ndf * 3, kernel_size = 4,
+                      stride = 2, padding = 1, dilation = 1, groups = 1,
+                      bias = False),
+            # Print(), # torch.Size([10, 384, 64, 64])
+            nn.BatchNorm2d(ndf * 3),
+            nn.LeakyReLU(0.2, inplace = True),
+            nn.Conv2d(in_channels = ndf * 3, out_channels = ndf * 4, kernel_size = 4,
+                      stride = 2, padding = 1, dilation = 1, groups = 1,
+                      bias = False),
+            # Print(), # torch.Size([10, 512, 32, 32])
             nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace = True),
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias = False),
-            Print(),
-            nn.BatchNorm2d(ndf * 8),
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0),
+            nn.Conv2d(in_channels = ndf * 4, out_channels = ndf * 5, kernel_size = 4,
+                      stride = 2, padding = 1, dilation = 1, groups = 1,
+                      bias = False),
+            # Print(), # torch.Size([10, 640, 16, 16])
+            nn.BatchNorm2d(ndf * 5),
+            nn.LeakyReLU(0.2, inplace = True),
+            nn.Conv2d(in_channels = ndf * 5, out_channels = ndf * 6, kernel_size = 4,
+                      stride = 2, padding = 1, dilation = 1, groups = 1,
+                      bias = False),
+            # Print(), # torch.Size([10, 768, 8, 8])
+            nn.BatchNorm2d(ndf * 6),
+            nn.Conv2d(in_channels = ndf * 6, out_channels = 1, kernel_size = 8,
+                      stride = 1, padding = 0, dilation = 1, groups = 1,
+                      bias = False),
+            # Print(), # torch.Size([10, 1, 1, 1])
             nn.Sigmoid()
         )
 

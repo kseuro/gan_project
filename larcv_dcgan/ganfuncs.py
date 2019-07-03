@@ -111,9 +111,8 @@ def weights_init(m):
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
 
-def random_noise(dim, nz):
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-    return torch.randn( (dim * dim, nz) ).view(-1, nz, 1, 1).to(device)
+def random_noise(dim, nz, device):
+    return torch.randn( (dim, nz) ).view(-1, nz, 1, 1).to(device)
 
 def make_dir(directory):
     try:
@@ -141,14 +140,14 @@ def train_start(out_dir, time):
         Returns: - custom out_dir for saving model outputs
                  - start_time for computing training time
     """
-    make_dir(out_dir)
     start_time = time
     now        = datetime.now()
     date       = now.strftime("%m-%d-%Y")
     time       = now.strftime("%H-%M-%S")
     date_time  = date + '_' + time
     out_dir    = out_dir + date_time
-
+    make_dir(out_dir)
+    
     return start_time, out_dir, now
 
 def save_model(model, savepath, ext, G):
@@ -160,7 +159,7 @@ def save_model(model, savepath, ext, G):
     make_dir(savepath)
     torch.save(model.state_dict(), out_params + ext)
 
-def save_outputs(model, out_dir, epoch, num_epochs, datetime, fixed_noise):
+def save_outputs(model, out_dir, epoch, num_epochs, datetime, fixed_noise, device):
     '''
         Creates a set of directories for saving G's output at the end of
          each epoch. Both random noise and fixed noise results are saved.
@@ -175,24 +174,24 @@ def save_outputs(model, out_dir, epoch, num_epochs, datetime, fixed_noise):
 
     # results using random noise
     savepath = out_dir_random + '/g_random_result'
-    show_results(model, epoch, fixed_noise, savepath, isFixed = False)
+    show_results(model, epoch, fixed_noise, savepath, device, isFixed = False)
 
     # results using fixed noise
     savepath = out_dir_fixed_ + '/g_fixed_result'
-    show_results(model, epoch, fixed_noise, savepath, isFixed = True)
+    show_results(model, epoch, fixed_noise, savepath, device, isFixed = True)
 
-def show_results(model, epoch, fixed_noise, savepath, isFixed=False):
+def show_results(model, epoch, fixed_noise, savepath, device, isFixed=False):
     """
         Function for visualizing intermediate results during and after training.
     """
-    z_ = random_noise(1, 100)
+    z_ = random_noise(1, 100, device)
 
     if isFixed:
         test_imgs = model(fixed_noise)
     else:
         test_imgs = model(z_)
 
-    sfg = 1 # size of grid in figure
+    sfg = 5 # size of grid in figure
     fig, axes = plt.subplots(sfg, sfg, figsize = (sfg, sfg))
     for i, j in itertools.product(range(sfg), range(sfg)):
         axes[i, j].get_xaxis().set_visible(False)
