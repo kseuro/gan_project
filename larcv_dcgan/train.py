@@ -39,25 +39,25 @@ from   tensorboardX import SummaryWriter
 # Inputs
 ##############################
 # Config dicts
-dirs = {'data_root': '/media/disk1/kai/larcv_png_1_ch/',
-        'tb_data':   '/media/disk1/kai/larcv_dcgan_experiment/tb_data/',
-        'save_dir':  '/media/disk1/kai/larcv_dcgan_experiment/save_dir/'}
-params = {'num_workers': 2,
-          'batch_size': 16,
-          'shuffle': True,
-          'num_workers': 4}
-image_size = 512    # size of larcv_png images
-num_epochs = 1      # number of epochs
-num_iters  = 0      # number of iterations to complete training
-nc         = 1      # number of color channels
-ngpu       = 2      # 0: CPU mode; > 1: MultiGPU mode
-nz         = 100    # length of the latent vector
-ngf        = 128    # depth of generator feature maps
-ndf        = 128    # depth of discriminator feature maps
-lr         = 0.0002 # Should be 0.0002 per DCGAN paper
-beta1      = 0.5    # Should be 0.5 per DCGAN paper
-z_dim      = params['batch_size'] # Defines batch size of fixed or random noise vectors
-tbX        = True  # TensorBoardX option
+dirs   = {'data_root': '/media/disk1/kai/larcv_png_1_ch/',
+          'tb_data':   '/media/disk1/kai/larcv_dcgan_experiment/tb_data/',
+          'save_dir':  '/media/disk1/kai/larcv_dcgan_experiment/save_dir/'}
+params = {'num_workers': 4,
+          'batch_size': 20,
+          'shuffle': True}
+image_size = 512                  # size of larcv_png images
+num_epochs = 1                    # number of epochs
+num_iters  = 0                    # number of iterations to complete training
+nc         = 1                    # number of color channels
+ngpu       = 2                    # 0: CPU mode; > 1: MultiGPU mode
+nz         = 100                  # length of the latent vector
+ngf        = 128                  # depth of generator feature maps
+ndf        = 128                  # depth of discriminator feature maps
+lr_G       = 0.0002               # Should be 0.0002 per DCGAN paper
+lr_D       = 0.00018              # Testing this value
+beta1      = 0.5                  # Should be 0.5 per DCGAN paper
+z_dim      = params['batch_size'] # Defines batch size of G input vectors
+tbX        = True                 # TensorBoardX option
 
 ##############################
 # Data and logging
@@ -66,8 +66,12 @@ tbX        = True  # TensorBoardX option
 if tbX:
     writer = SummaryWriter(dirs['tb_data'])
 
+# List of loss values for TB and plotting
+D_losses = []
+G_losses = []
+
 # Data transformations
-norm_mean, norm_std = [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]
+norm_mean, norm_std = [0.5], [0.5]
 train_transform = transforms.Compose( [ transforms.Grayscale(num_output_channels=1),
                                         transforms.Resize(image_size),
                                         transforms.CenterCrop(image_size),
@@ -112,23 +116,22 @@ netD.to(device)
 BCE_loss = nn.BCELoss()
 
 # Adam optimizer
-optimG = optim.Adam(netG.parameters(), lr = lr, betas = (beta1, 0.999))
-optimD = optim.Adam(netD.parameters(), lr = lr, betas = (beta1, 0.999))
+optimG = optim.Adam(netG.parameters(), lr = lr_G, betas = (beta1, 0.999))
+optimD = optim.Adam(netD.parameters(), lr = lr_D, betas = (beta1, 0.999))
 
 # Dictionary of accuracies
 train_hist = ganfuncs.train_hist()
 
 # Times and save directory
-start_time, out_dir, now = ganfuncs.train_start(dirs['save_dir'], time.time())
+start_time, date_time, out_dir, _ = ganfuncs.train_start(dirs['save_dir'], time.time())
+
+# Update directory with current experiment name
+dirs.update( {'save_dir': out_dir} )
 
 ##############################
 # Training Loop
 ##############################
 for epoch in range(num_epochs):
-
-    # List of loss values for TB and plotting
-    D_losses = []
-    G_losses = []
 
     epoch_start_time = time.time()
 
@@ -143,9 +146,8 @@ for epoch in range(num_epochs):
         netD.zero_grad()
 
         # Format batch
-        # b_size = data.size(0)
-        b_size = 16
-        
+        b_size = len(data)
+
         ## Establish soft data labels
         ## Flip target on BCE loss: real: 1->0, fake: 0->1
         real_label = random.uniform(0, 0.1)
@@ -243,20 +245,18 @@ for epoch in range(num_epochs):
         train_hist['per_epoch_time'].append(epoch_time)
 
         # Output epoch summary to terminal
-        print_string = '[{}/{}] - epoch_time:{}, loss_d:{:.3f}, loss_g:{:.3f}'
-        print(print_string.format((epoch + 1), num_epochs, epoch_time,
-                                  loss_d, loss_g))
+        print_string = '[{}/{}] epoch_time:{:.3f}, loss_d:{:.3f}, loss_g:{:.3f}'
+        print(print_string.format(epoch, num_epochs, epoch_time, loss_d, loss_g))
+        num_iters += 1
 
         # Output end-of-epoch losses to TbX
         if tbX:
             writer.add_scalar('D_Loss', loss_d.item(), epoch)
             writer.add_scalar('G_Loss', loss_g.item(), epoch)
 
-        # Save G's current-state outputs
-        ganfuncs.save_outputs(netG, out_dir, epoch, num_epochs, datetime,
-                              fixed_noise, device)
-
-        num_iters += 1
+    # Save G's current-state outputs
+    ganfuncs.save_outputs(netG, dirs['save_dir'], epoch, num_epochs, date_time,
+                          fixed_noise, device)
 
 ##############################
 # Training Complete
@@ -270,26 +270,25 @@ if tbX:
 # Calculate training time
 end_time = time.time()
 total_time_s = end_time - start_time
-total_time_h = total_time_s % 60.0
+total_time_h = total_time_s / 3600.0
 train_hist['total_time_s'].append(total_time_s)
 train_hist['total_time_h'].append(total_time_h)
 avg_time = torch.mean(torch.FloatTensor(train_hist['per_epoch_time']))
 
 # Print results to terminal
-print('Total time (s):{:.2f}'.format(total_time_s))
-print('Total time (hr):{:.2f}'.format(total_time_h))
+print('Total time (s): {:.2f}'.format(total_time_s))
+print('Total time (hr): {:.2f}'.format(total_time_h))
 print('Total iterations:{}'.format(num_iters))
 print('Avg time per epoch:{:.2f}'.format(avg_time))
 print('num_epochs:{}'.format(num_epochs))
-print('total_time:{:.2f}'.format(total_time))
 
 # Save model parameters
 ext = '.tar'
-ganfuncs.save_model(netG, out_dir, ext, G = True)  # G params
-ganfuncs.save_model(netD, out_dir, ext, G = False) # D params
+ganfuncs.el(netG, dirs['save_dir'], ext, G = True)  # G params
+ganfuncs.save_model(netD, dirs['save_dir'], ext, G = False) # D params
 
 # Plot losses
-ganfuncs.plot_losses(dirs['save_dir'], datetime,
+ganfuncs.plot_losses(dirs['save_dir'], date_time,
                      train_hist['G_losses'],
                      train_hist['D_losses'])
 

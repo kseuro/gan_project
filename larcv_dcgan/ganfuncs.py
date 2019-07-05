@@ -147,16 +147,14 @@ def train_start(out_dir, time):
     date_time  = date + '_' + time
     out_dir    = out_dir + date_time
     make_dir(out_dir)
-    
-    return start_time, out_dir, now
+
+    return start_time, date_time, out_dir, now
 
 def save_model(model, savepath, ext, G):
     if G == True:
         out_params = savepath + '/generator_params'
     elif G == False:
         out_params = savepath + '/discriminator_params'
-
-    make_dir(savepath)
     torch.save(model.state_dict(), out_params + ext)
 
 def save_outputs(model, out_dir, epoch, num_epochs, datetime, fixed_noise, device):
@@ -191,27 +189,25 @@ def show_results(model, epoch, fixed_noise, savepath, device, isFixed=False):
     else:
         test_imgs = model(z_)
 
-    sfg = 5 # size of grid in figure
-    fig, axes = plt.subplots(sfg, sfg, figsize = (sfg, sfg))
-    for i, j in itertools.product(range(sfg), range(sfg)):
-        axes[i, j].get_xaxis().set_visible(False)
-        axes[i, j].get_yaxis().set_visible(False)
+    # sfg = 1 # size of grid in figure
+    # fig, axes = plt.subplots(sfg, sfg, figsize = (sfg, sfg))
+    # for i, j in itertools.product(range(sfg), range(sfg)):
+    #     axes[i, j].get_xaxis().set_visible(False)
+    #     axes[i, j].get_yaxis().set_visible(False)
+    #
+    # for k in range(1):
+    #     axes[i, j].cla()
+    #     axes[i, j].imshow(test_imgs[k, 0].cpu().data.numpy(), cmap = 'gray')
 
-    for k in range(1):
-        axes[i, j].cla()
-        axes[i, j].imshow(test_imgs[k, 0].cpu().data.numpy(), cmap = 'gray')
-
-    label = 'Epoch_{}'.format(epoch)
-    fig.text(0.5, 0.04, label, ha = 'center')
-    plt.savefig(savepath)
-    plt.close()
+    make_dir(savepath)
+    label = savepath + '/Epoch_{}'.format(epoch) + '.png'
+    test_img = test_imgs[0, 0].cpu().data.numpy()
+    plt.imsave(label, test_img, cmap='gray')
 
 def plot_losses(out_dir, date_time, G_losses, D_losses):
     """
         Save and visualize results after the completion of training.
     """
-    make_dir(out_dir)
-
     # Plot G and D losses
     plt.figure()
     plt.title("Generator and Discriminator Loss Curves")
